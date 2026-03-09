@@ -248,6 +248,17 @@ function normalizeRecipe(ld, sourceUrl) {
     else if (servNum && servNum > 6) recipe.gathering = 'party';
   }
 
+  // Detect dietary from keywords/tags as fallback
+  if (recipe.dietary.length === 0 && recipe.tags.length > 0) {
+    var tagStr = recipe.tags.join(' ').toLowerCase();
+    var dietaryChecks = ['vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo', 'nut-free', 'low-carb'];
+    dietaryChecks.forEach(function(d) {
+      if (tagStr.indexOf(d) >= 0 && recipe.dietary.indexOf(d) < 0) {
+        recipe.dietary.push(d);
+      }
+    });
+  }
+
   return recipe;
 }
 
@@ -283,8 +294,10 @@ function mapDietary(diet) {
   if (lower.includes('vegan')) return 'vegan';
   if (lower.includes('gluten')) return 'gluten-free';
   if (lower.includes('dairy')) return 'dairy-free';
-  if (lower.includes('keto')) return 'keto';
+  if (lower.includes('keto') || lower.includes('ketogenic')) return 'keto';
   if (lower.includes('paleo')) return 'paleo';
+  if (lower.includes('nut-free') || lower.includes('nut free')) return 'nut-free';
+  if (lower.includes('low-carb') || lower.includes('low carb') || lower.includes('lowcarb')) return 'low-carb';
   return null;
 }
 
