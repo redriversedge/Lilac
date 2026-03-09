@@ -112,3 +112,32 @@ function fbSetNotes(docId, userName, notes) {
   update['notes.' + userName] = notes;
   return recipesCollection.doc(docId).update(update);
 }
+
+// --- Grocery List Firestore Helpers ---
+
+var groceryCollection = db.collection('groceryList');
+var GROCERY_DOC_ID = 'shared';
+
+function fbGetGroceryList() {
+  return groceryCollection.doc(GROCERY_DOC_ID).get().then(function(doc) {
+    if (doc.exists) return doc.data();
+    return { items: [], lastUpdated: null };
+  });
+}
+
+function fbSetGroceryList(data) {
+  data.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+  return groceryCollection.doc(GROCERY_DOC_ID).set(data);
+}
+
+function fbListenToGroceryList(callback) {
+  return groceryCollection.doc(GROCERY_DOC_ID).onSnapshot(function(doc) {
+    if (doc.exists) {
+      callback(doc.data());
+    } else {
+      callback({ items: [], lastUpdated: null });
+    }
+  }, function(error) {
+    console.error('Grocery list listener error:', error);
+  });
+}

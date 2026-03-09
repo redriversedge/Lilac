@@ -197,6 +197,7 @@ function shuffleRecipe() {
 
 function initApp() {
   startRecipeListener();
+  startGroceryListener();
   updateUserAvatar(getCurrentUser());
   renderCurrentView();
 }
