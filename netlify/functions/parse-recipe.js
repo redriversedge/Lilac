@@ -231,6 +231,23 @@ function normalizeRecipe(ld, sourceUrl) {
     recipe.totalTime = (recipe.prepTime || 0) + (recipe.cookTime || 0);
   }
 
+  // Infer difficulty from total time if not set
+  if (!recipe.difficulty) {
+    var totalMin = recipe.totalTime || recipe.prepTime || 0;
+    if (totalMin > 0 && totalMin <= 30) recipe.difficulty = 'easy';
+    else if (totalMin > 30 && totalMin <= 60) recipe.difficulty = 'intermediate';
+    else if (totalMin > 60) recipe.difficulty = 'advanced';
+  }
+
+  // Infer gathering from servings
+  if (recipe.servings) {
+    var servNum = parseInt(String(recipe.servings).replace(/[^0-9]/g, ''), 10);
+    if (servNum && servNum <= 1) recipe.gathering = 'solo';
+    else if (servNum && servNum <= 2) recipe.gathering = 'couple';
+    else if (servNum && servNum <= 6) recipe.gathering = 'family';
+    else if (servNum && servNum > 6) recipe.gathering = 'party';
+  }
+
   return recipe;
 }
 
@@ -298,6 +315,7 @@ async function extractWithAI(apiKey, html, url) {
   "cuisine": "cuisine type",
   "mealType": "one of: breakfast, brunch, lunch, dinner, snack, dessert, appetizer, side, drink",
   "difficulty": "one of: easy, intermediate, advanced",
+  "gathering": "one of: solo, couple, family, party (based on servings: 1=solo, 2=couple, 3-6=family, 7+=party)",
   "dietary": ["array of: vegetarian, vegan, gluten-free, dairy-free, keto, paleo, nut-free, low-carb"],
   "ingredients": ["array of ingredient strings"],
   "instructions": ["array of instruction steps"],

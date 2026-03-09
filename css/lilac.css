@@ -577,6 +577,89 @@ select {
   color: var(--success);
 }
 
+.batch-toggle-row {
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+.batch-section {
+  margin-top: 0.75rem;
+}
+
+.batch-section label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.batch-section textarea {
+  width: 100%;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.batch-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.batch-status {
+  margin-top: 0.75rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.batch-status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  margin-bottom: 0.375rem;
+}
+
+.batch-status-item.pending {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+
+.batch-status-item.loading {
+  background: var(--accent-light);
+  color: var(--accent);
+}
+
+.batch-status-item.success {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.batch-status-item.error {
+  background: var(--error-light);
+  color: var(--error);
+}
+
+.batch-status-item .batch-url-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-summary {
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 0.5rem;
+  background: var(--success-light);
+  color: var(--success);
+}
+
 .divider-text {
   text-align: center;
   margin: 1.25rem 0;
