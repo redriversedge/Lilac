@@ -293,9 +293,22 @@ function populateRecipeForm(data, url) {
   setFormValue('recipe-prep-time', data.prepTime);
   setFormValue('recipe-cook-time', data.cookTime);
   setFormValue('recipe-servings', data.servings);
-  setFormValue('recipe-cuisine', data.cuisine);
-  setFormValue('recipe-meal-type', data.mealType);
-  setFormValue('recipe-difficulty', data.difficulty);
+
+  // Match cuisine to select options (case-insensitive)
+  setSelectBestMatch('recipe-cuisine', data.cuisine);
+
+  // Match meal type to select options (case-insensitive)
+  setSelectBestMatch('recipe-meal-type', data.mealType);
+
+  // Match difficulty to select options (case-insensitive)
+  setSelectBestMatch('recipe-difficulty', data.difficulty);
+
+  // Infer gathering size from servings if not provided
+  var gathering = data.gathering || inferGathering(data.servings);
+  if (gathering) {
+    setSelectBestMatch('recipe-gathering', gathering);
+  }
+
   if (data.ingredients && data.ingredients.length) {
     setFormValue('recipe-ingredients', data.ingredients.join('\n'));
   }
@@ -315,6 +328,38 @@ function populateRecipeForm(data, url) {
       cb.checked = data.dietary.indexOf(cb.value) >= 0;
     });
   }
+}
+
+// Match a value to a select element's options case-insensitively
+function setSelectBestMatch(selectId, value) {
+  if (!value) return;
+  var el = document.getElementById(selectId);
+  if (!el) return;
+  var lower = String(value).toLowerCase().trim();
+  for (var i = 0; i < el.options.length; i++) {
+    if (el.options[i].value.toLowerCase() === lower) {
+      el.value = el.options[i].value;
+      return;
+    }
+  }
+  // Try partial match (e.g. "main course" -> "dinner")
+  for (var j = 0; j < el.options.length; j++) {
+    if (el.options[j].value && lower.indexOf(el.options[j].value.toLowerCase()) >= 0) {
+      el.value = el.options[j].value;
+      return;
+    }
+  }
+}
+
+// Infer gathering size from servings string
+function inferGathering(servings) {
+  if (!servings) return '';
+  var num = parseInt(String(servings).replace(/[^0-9]/g, ''), 10);
+  if (!num || isNaN(num)) return '';
+  if (num <= 1) return 'solo';
+  if (num <= 2) return 'couple';
+  if (num <= 6) return 'family';
+  return 'party';
 }
 
 function setFormValue(id, value) {
@@ -371,6 +416,144 @@ function saveNewRecipe(event) {
   return false;
 }
 
+// --- Batch Import ---
+
+function toggleBatchImport() {
+  var section = document.getElementById('batch-import-section');
+  var btn = document.getElementById('batch-toggle-btn');
+  if (section.classList.contains('hidden')) {
+    section.classList.remove('hidden');
+    btn.textContent = 'Hide batch import';
+  } else {
+    section.classList.add('hidden');
+    btn.textContent = 'Batch import multiple URLs';
+  }
+}
+
+function startBatchImport() {
+  var textarea = document.getElementById('batch-url-input');
+  var raw = (textarea ? textarea.value : '').trim();
+  if (!raw) return;
+
+  var urls = raw.split('\n').map(function(line) { return line.trim(); }).filter(function(line) {
+    return line && (line.startsWith('http://') || line.startsWith('https://'));
+  });
+
+  if (urls.length === 0) {
+    showToast('No valid URLs found. Each URL should start with http:// or https://');
+    return;
+  }
+
+  var statusEl = document.getElementById('batch-status');
+  statusEl.classList.remove('hidden');
+  statusEl.innerHTML = '';
+
+  var batchBtn = document.getElementById('batch-import-btn');
+  batchBtn.disabled = true;
+  batchBtn.textContent = 'Importing...';
+
+  // Create status items for each URL
+  var items = [];
+  urls.forEach(function(url, idx) {
+    var div = document.createElement('div');
+    div.className = 'batch-status-item pending';
+    div.innerHTML = '<span class="batch-url-text">' + escapeHtml(truncateUrl(url)) + '</span><span>Waiting...</span>';
+    statusEl.appendChild(div);
+    items.push({ url: url, el: div });
+  });
+
+  // Process URLs sequentially
+  var successCount = 0;
+  var failCount = 0;
+
+  function processNext(idx) {
+    if (idx >= items.length) {
+      // Done - show summary
+      batchBtn.disabled = false;
+      batchBtn.textContent = 'Import All';
+      var summary = document.createElement('div');
+      summary.className = 'batch-summary';
+      summary.textContent = successCount + ' of ' + items.length + ' recipes imported successfully';
+      if (failCount > 0) {
+        summary.style.background = 'var(--warning)';
+        summary.style.color = 'white';
+      }
+      statusEl.appendChild(summary);
+      return;
+    }
+
+    var item = items[idx];
+    item.el.className = 'batch-status-item loading';
+    item.el.innerHTML = '<span class="batch-url-text">' + escapeHtml(truncateUrl(item.url)) + '</span><span>Importing...</span>';
+
+    fetch('/.netlify/functions/parse-recipe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: item.url })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.error) {
+        item.el.className = 'batch-status-item error';
+        item.el.innerHTML = '<span class="batch-url-text">' + escapeHtml(truncateUrl(item.url)) + '</span><span>Failed</span>';
+        failCount++;
+        processNext(idx + 1);
+        return;
+      }
+
+      // Auto-save the recipe directly
+      var recipeData = {
+        url: item.url,
+        title: data.title || '',
+        description: data.description || '',
+        image: data.image || '',
+        prepTime: parseInt(data.prepTime) || 0,
+        cookTime: parseInt(data.cookTime) || 0,
+        totalTime: (parseInt(data.prepTime) || 0) + (parseInt(data.cookTime) || 0),
+        servings: data.servings || '',
+        cuisine: data.cuisine || '',
+        mealType: data.mealType || '',
+        difficulty: data.difficulty || '',
+        gathering: data.gathering || '',
+        dietary: data.dietary || [],
+        ingredients: data.ingredients || [],
+        instructions: data.instructions || [],
+        tags: data.tags || []
+      };
+
+      addRecipe(recipeData).then(function() {
+        item.el.className = 'batch-status-item success';
+        item.el.innerHTML = '<span class="batch-url-text">' + escapeHtml(data.title || truncateUrl(item.url)) + '</span><span>Saved</span>';
+        successCount++;
+        processNext(idx + 1);
+      }).catch(function() {
+        item.el.className = 'batch-status-item error';
+        item.el.innerHTML = '<span class="batch-url-text">' + escapeHtml(truncateUrl(item.url)) + '</span><span>Save failed</span>';
+        failCount++;
+        processNext(idx + 1);
+      });
+    })
+    .catch(function() {
+      item.el.className = 'batch-status-item error';
+      item.el.innerHTML = '<span class="batch-url-text">' + escapeHtml(truncateUrl(item.url)) + '</span><span>Failed</span>';
+      failCount++;
+      processNext(idx + 1);
+    });
+  }
+
+  processNext(0);
+}
+
+function truncateUrl(url) {
+  try {
+    var u = new URL(url);
+    var path = u.pathname.length > 30 ? u.pathname.substring(0, 30) + '...' : u.pathname;
+    return u.hostname + path;
+  } catch (e) {
+    return url.length > 50 ? url.substring(0, 50) + '...' : url;
+  }
+}
+
 function resetRecipeForm() {
   var form = document.getElementById('add-recipe-form');
   if (form) {
@@ -379,4 +562,15 @@ function resetRecipeForm() {
   }
   var status = document.getElementById('import-status');
   if (status) status.classList.add('hidden');
+  // Reset batch import
+  var batchSection = document.getElementById('batch-import-section');
+  if (batchSection) batchSection.classList.add('hidden');
+  var batchInput = document.getElementById('batch-url-input');
+  if (batchInput) batchInput.value = '';
+  var batchStatus = document.getElementById('batch-status');
+  if (batchStatus) { batchStatus.classList.add('hidden'); batchStatus.innerHTML = ''; }
+  var batchToggle = document.getElementById('batch-toggle-btn');
+  if (batchToggle) batchToggle.textContent = 'Batch import multiple URLs';
+  var batchBtn = document.getElementById('batch-import-btn');
+  if (batchBtn) { batchBtn.disabled = false; batchBtn.textContent = 'Import All'; }
 }
