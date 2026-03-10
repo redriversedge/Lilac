@@ -146,8 +146,10 @@ function fetchRecommendations() {
     discoverLoading = false;
     if (data.error) {
       discoverError = data.error;
-    } else if (data.suggestions) {
+    } else if (data.suggestions && data.suggestions.length > 0) {
       discoverSuggestions = data.suggestions;
+    } else {
+      discoverError = 'No matching recipes found. Try again for different results!';
     }
     renderCurrentView();
   })

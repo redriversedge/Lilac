@@ -33,8 +33,9 @@ exports.handler = async function(event) {
       };
     }
 
-    // Build Spoonacular query params from taste profile
-    var params = [
+    // Build query params - keep it simple to avoid zero results
+    // Use cuisine as the primary filter, with a broad fallback
+    var baseParams = [
       'apiKey=' + apiKey,
       'addRecipeInformation=true',
       'fillIngredients=true',
@@ -43,44 +44,13 @@ exports.handler = async function(event) {
       'instructionsRequired=true'
     ];
 
+    // Primary query: just cuisine (most reliable filter)
+    var params = baseParams.slice();
     if (profile.topCuisines && profile.topCuisines.length > 0) {
-      params.push('cuisine=' + encodeURIComponent(profile.topCuisines.slice(0, 3).join(',')));
-    }
-
-    // Use the most common meal type
-    if (profile.mealTypeCounts) {
-      var topMealType = Object.keys(profile.mealTypeCounts)
-        .sort(function(a, b) { return profile.mealTypeCounts[b] - profile.mealTypeCounts[a]; })[0];
-      if (topMealType) {
-        params.push('type=' + encodeURIComponent(topMealType));
-      }
-    }
-
-    if (profile.avgPrepTime && profile.avgPrepTime > 0) {
-      // Add some buffer to the max ready time
-      params.push('maxReadyTime=' + Math.round(profile.avgPrepTime * 1.5));
-    }
-
-    if (profile.topIngredients && profile.topIngredients.length > 0) {
-      params.push('includeIngredients=' + encodeURIComponent(profile.topIngredients.slice(0, 5).join(',')));
-    }
-
-    // Use dominant dietary preference if one stands out
-    if (profile.dietaryCounts) {
-      var dietKeys = Object.keys(profile.dietaryCounts);
-      if (dietKeys.length > 0) {
-        var topDiet = dietKeys.sort(function(a, b) {
-          return profile.dietaryCounts[b] - profile.dietaryCounts[a];
-        })[0];
-        // Only apply if it covers a meaningful portion of recipes
-        if (profile.totalRecipes && profile.dietaryCounts[topDiet] >= profile.totalRecipes * 0.3) {
-          params.push('diet=' + encodeURIComponent(topDiet));
-        }
-      }
+      params.push('cuisine=' + encodeURIComponent(profile.topCuisines[0]));
     }
 
     var url = '/recipes/complexSearch?' + params.join('&');
-
     var data = await callSpoonacular(url);
     var response = JSON.parse(data);
 
@@ -93,6 +63,13 @@ exports.handler = async function(event) {
           error: 'Daily recommendation limit reached. Try again tomorrow.'
         })
       };
+    }
+
+    // If no results with cuisine filter, try without any filters
+    if (!response.results || response.results.length === 0) {
+      var fallbackUrl = '/recipes/complexSearch?' + baseParams.join('&');
+      var fallbackData = await callSpoonacular(fallbackUrl);
+      response = JSON.parse(fallbackData);
     }
 
     var suggestions = [];
