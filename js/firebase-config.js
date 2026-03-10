@@ -84,6 +84,11 @@ function fbToggleSave(docId, userName) {
     } else {
       savedBy.push(userName);
     }
+    // If nobody has it saved and it was a discovered recipe, delete it
+    var tags = data.tags || [];
+    if (savedBy.length === 0 && tags.indexOf('discovered') >= 0) {
+      return recipesCollection.doc(docId).delete();
+    }
     return recipesCollection.doc(docId).update({ savedBy: savedBy });
   });
 }
@@ -95,13 +100,17 @@ function fbSetRating(docId, userName, rating) {
   return recipesCollection.doc(docId).update(update);
 }
 
-// Update cooked count for a user
+// Toggle cooked status for a user
 function fbMarkCooked(docId, userName) {
   return recipesCollection.doc(docId).get().then(function(doc) {
     if (!doc.exists) return;
     var data = doc.data();
     var cookedBy = data.cookedBy || {};
-    cookedBy[userName] = (cookedBy[userName] || 0) + 1;
+    if (cookedBy[userName]) {
+      delete cookedBy[userName];
+    } else {
+      cookedBy[userName] = 1;
+    }
     return recipesCollection.doc(docId).update({ cookedBy: cookedBy });
   });
 }

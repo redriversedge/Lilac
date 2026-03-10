@@ -80,6 +80,9 @@ function addRecipeToGroceryList(recipeId) {
 
   fbSetGroceryList(updated).then(function() {
     showToast(newItems.length + ' ingredients added to list');
+  }).catch(function(err) {
+    showToast('Error adding ingredients to list');
+    console.error('Grocery list error:', err);
   });
 }
 

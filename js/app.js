@@ -159,8 +159,8 @@ function renderCollectionView() {
 
   // Total cooked
   var totalCooked = 0;
-  saved.forEach(function(r) { totalCooked += getMyCookedCount(r); });
-  html += '<div class="collection-stat"><span class="collection-stat-value">' + totalCooked + '</span><span class="collection-stat-label">Times Cooked</span></div>';
+  saved.forEach(function(r) { if (getMyCookedCount(r) > 0) totalCooked++; });
+  html += '<div class="collection-stat"><span class="collection-stat-value">' + totalCooked + '</span><span class="collection-stat-label">Cooked</span></div>';
   html += '</div></div>';
 
   // Recipe grid
