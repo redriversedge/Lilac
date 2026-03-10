@@ -1,5 +1,5 @@
 // ============================================================
-// LILAC - Recommendation Engine (AI-powered via Claude)
+// LILAC - Recommendation Engine (Spoonacular-powered)
 // ============================================================
 
 var discoverSuggestions = [];
@@ -52,11 +52,13 @@ function renderDiscoverView() {
     html += '<div style="padding:1rem;text-align:center;color:var(--error)">' + escapeHtml(discoverError) + '</div>';
   }
 
-  // Suggestions
+  // Suggestions as tile grid
   if (discoverSuggestions.length > 0 && !discoverLoading) {
+    html += '<div class="recipe-grid">';
     discoverSuggestions.forEach(function(s, idx) {
-      html += renderSuggestionCard(s, idx);
+      html += renderSuggestionTile(s, idx);
     });
+    html += '</div>';
   }
 
   // Empty state if no recipes yet
@@ -71,32 +73,54 @@ function renderDiscoverView() {
   return html;
 }
 
-function renderSuggestionCard(suggestion, index) {
-  var html = '<div class="suggestion-card">';
-  html += '<h3>' + escapeHtml(suggestion.title) + '</h3>';
-  if (suggestion.description) {
-    html += '<p>' + escapeHtml(suggestion.description) + '</p>';
+function renderSuggestionTile(suggestion, index) {
+  var totalTime = suggestion.totalTime || suggestion.prepTime || 0;
+  var timeStr = totalTime > 0 ? totalTime + ' min' : '';
+
+  var html = '<div class="recipe-card suggestion-tile">';
+  html += '<div class="recipe-card-wrapper">';
+
+  // Image area - clicking opens source URL
+  if (suggestion.image) {
+    html += '<a href="' + escapeHtml(suggestion.url) + '" target="_blank" rel="noopener" class="suggestion-tile-link">';
+    html += '<img class="recipe-card-img" src="' + escapeHtml(suggestion.image) + '" alt="' + escapeHtml(suggestion.title) + '" loading="lazy" onerror="this.outerHTML=\'<div class=\\\'recipe-card-img-placeholder\\\'>&#127860;</div>\'">';
+    html += '</a>';
+  } else {
+    html += '<div class="recipe-card-img-placeholder">&#127860;</div>';
   }
-  if (suggestion.whyYoullLikeIt) {
-    html += '<div class="suggestion-why">"' + escapeHtml(suggestion.whyYoullLikeIt) + '"</div>';
+  html += '</div>';
+
+  // Card body
+  html += '<div class="recipe-card-body">';
+
+  // Title links to source
+  if (suggestion.url) {
+    html += '<a href="' + escapeHtml(suggestion.url) + '" target="_blank" rel="noopener" class="suggestion-tile-title-link">';
+    html += '<div class="recipe-card-title">' + escapeHtml(suggestion.title || 'Untitled') + ' &#8599;</div>';
+    html += '</a>';
+  } else {
+    html += '<div class="recipe-card-title">' + escapeHtml(suggestion.title || 'Untitled') + '</div>';
   }
-  html += '<div class="suggestion-meta">';
-  if (suggestion.cuisine) html += '<span>' + escapeHtml(suggestion.cuisine) + '</span>';
-  if (suggestion.prepTime) html += '<span>~' + suggestion.prepTime + ' min</span>';
+
+  // Metadata row
+  html += '<div class="recipe-card-meta">';
+  if (timeStr) html += '<span>&#9201; ' + timeStr + '</span>';
+  if (suggestion.cuisine) html += '<span class="recipe-card-badge">' + escapeHtml(suggestion.cuisine) + '</span>';
   if (suggestion.difficulty) html += '<span>' + escapeHtml(suggestion.difficulty) + '</span>';
   html += '</div>';
 
-  if (suggestion.ingredients && suggestion.ingredients.length > 0) {
-    html += '<p style="font-size:0.8125rem;color:var(--text-muted);margin-bottom:0.75rem">';
-    html += 'Key ingredients: ' + suggestion.ingredients.slice(0, 6).map(escapeHtml).join(', ');
-    html += '</p>';
+  // Why you'll like it
+  if (suggestion.whyYoullLikeIt) {
+    html += '<div class="suggestion-tile-why">' + escapeHtml(suggestion.whyYoullLikeIt) + '</div>';
   }
 
-  html += '<div class="suggestion-actions">';
-  html += '<button class="btn btn-sm btn-accent" onclick="saveSuggestion(' + index + ')">Save to Collection</button>';
-  html += '<button class="btn btn-sm btn-ghost" onclick="dismissSuggestion(' + index + ')">Not interested</button>';
+  // Action buttons
+  html += '<div class="suggestion-tile-actions">';
+  html += '<button class="btn btn-sm btn-accent" onclick="event.stopPropagation();saveSuggestion(' + index + ')">Save</button>';
+  html += '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();dismissSuggestion(' + index + ')">Dismiss</button>';
   html += '</div>';
-  html += '</div>';
+
+  html += '</div></div>';
   return html;
 }
 
@@ -115,7 +139,7 @@ function fetchRecommendations() {
   fetch('/.netlify/functions/lilac-recommend', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profile: profile, count: 5 })
+    body: JSON.stringify({ profile: profile, count: 6 })
   })
   .then(function(res) { return res.json(); })
   .then(function(data) {
@@ -140,13 +164,13 @@ function saveSuggestion(index) {
   if (!s) return;
 
   var recipeData = {
-    url: '',
+    url: s.url || '',
     title: s.title || '',
     description: s.description || '',
-    image: '',
+    image: s.image || '',
     prepTime: parseInt(s.prepTime) || 0,
     cookTime: parseInt(s.cookTime) || 0,
-    totalTime: (parseInt(s.prepTime) || 0) + (parseInt(s.cookTime) || 0),
+    totalTime: parseInt(s.totalTime) || ((parseInt(s.prepTime) || 0) + (parseInt(s.cookTime) || 0)),
     servings: s.servings || '',
     cuisine: s.cuisine || '',
     mealType: s.mealType || '',
@@ -155,7 +179,7 @@ function saveSuggestion(index) {
     dietary: s.dietary || [],
     ingredients: s.ingredients || [],
     instructions: s.instructions || [],
-    tags: ['ai-suggested']
+    tags: ['discovered']
   };
 
   addRecipe(recipeData).then(function() {

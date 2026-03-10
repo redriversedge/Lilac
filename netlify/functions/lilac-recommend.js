@@ -1,10 +1,10 @@
 // ============================================================
 // LILAC - Recipe Recommendation Netlify Function
-// Uses Claude to suggest recipes based on taste profile
+// Uses Spoonacular API to find real recipes based on taste profile
 // ============================================================
-const https = require('https');
+var https = require('https');
 
-const CORS_HEADERS = {
+var CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -20,93 +20,92 @@ exports.handler = async function(event) {
   }
 
   try {
-    const { profile, count } = JSON.parse(event.body);
+    var parsed = JSON.parse(event.body);
+    var profile = parsed.profile;
+    var count = parsed.count || 5;
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    var apiKey = process.env.SPOONACULAR_API_KEY;
     if (!apiKey) {
       return {
         statusCode: 500,
         headers: CORS_HEADERS,
-        body: JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured. Add it in Netlify site settings.' })
+        body: JSON.stringify({ error: 'SPOONACULAR_API_KEY not configured. Add it in Netlify site settings.' })
       };
     }
 
-    const numSuggestions = count || 5;
+    // Build Spoonacular query params from taste profile
+    var params = [
+      'apiKey=' + apiKey,
+      'addRecipeInformation=true',
+      'fillIngredients=true',
+      'number=' + count,
+      'sort=random',
+      'instructionsRequired=true'
+    ];
 
-    let profileSummary = 'User taste profile:\n';
-    if (profile.totalRecipes) profileSummary += '- Total saved recipes: ' + profile.totalRecipes + '\n';
     if (profile.topCuisines && profile.topCuisines.length > 0) {
-      profileSummary += '- Favorite cuisines: ' + profile.topCuisines.join(', ') + '\n';
-      profileSummary += '- Cuisine breakdown: ' + JSON.stringify(profile.cuisineCounts) + '\n';
+      params.push('cuisine=' + encodeURIComponent(profile.topCuisines.slice(0, 3).join(',')));
     }
+
+    // Use the most common meal type
+    if (profile.mealTypeCounts) {
+      var topMealType = Object.keys(profile.mealTypeCounts)
+        .sort(function(a, b) { return profile.mealTypeCounts[b] - profile.mealTypeCounts[a]; })[0];
+      if (topMealType) {
+        params.push('type=' + encodeURIComponent(topMealType));
+      }
+    }
+
+    if (profile.avgPrepTime && profile.avgPrepTime > 0) {
+      // Add some buffer to the max ready time
+      params.push('maxReadyTime=' + Math.round(profile.avgPrepTime * 1.5));
+    }
+
     if (profile.topIngredients && profile.topIngredients.length > 0) {
-      profileSummary += '- Commonly used ingredients: ' + profile.topIngredients.join(', ') + '\n';
-    }
-    if (profile.avgPrepTime) profileSummary += '- Average prep time: ' + profile.avgPrepTime + ' minutes\n';
-    if (profile.mealTypeCounts) profileSummary += '- Meal type preferences: ' + JSON.stringify(profile.mealTypeCounts) + '\n';
-    if (profile.dietaryCounts && Object.keys(profile.dietaryCounts).length > 0) {
-      profileSummary += '- Dietary preferences: ' + JSON.stringify(profile.dietaryCounts) + '\n';
+      params.push('includeIngredients=' + encodeURIComponent(profile.topIngredients.slice(0, 5).join(',')));
     }
 
-    const prompt = `You are a recipe recommendation engine. Based on the user's taste profile, suggest ${numSuggestions} recipes they would enjoy.
-
-${profileSummary}
-
-Suggest recipes that:
-1. Match their cuisine preferences but also introduce variety
-2. Use ingredients they commonly cook with
-3. Match their typical prep time range
-4. Include a mix of familiar and slightly adventurous options
-5. Are real, well-known recipes (not made up)
-
-Return ONLY valid JSON in this exact format:
-{
-  "suggestions": [
-    {
-      "title": "Recipe Name",
-      "description": "Brief appetizing description",
-      "cuisine": "Cuisine type",
-      "mealType": "dinner/lunch/breakfast/etc",
-      "prepTime": 30,
-      "cookTime": 20,
-      "difficulty": "easy/intermediate/advanced",
-      "servings": "4",
-      "ingredients": ["ingredient 1", "ingredient 2", "..."],
-      "instructions": ["Step 1...", "Step 2...", "..."],
-      "whyYoullLikeIt": "Brief reason why this matches their taste",
-      "dietary": ["any applicable dietary tags"],
-      "tags": ["relevant tags"]
+    // Use dominant dietary preference if one stands out
+    if (profile.dietaryCounts) {
+      var dietKeys = Object.keys(profile.dietaryCounts);
+      if (dietKeys.length > 0) {
+        var topDiet = dietKeys.sort(function(a, b) {
+          return profile.dietaryCounts[b] - profile.dietaryCounts[a];
+        })[0];
+        // Only apply if it covers a meaningful portion of recipes
+        if (profile.totalRecipes && profile.dietaryCounts[topDiet] >= profile.totalRecipes * 0.3) {
+          params.push('diet=' + encodeURIComponent(topDiet));
+        }
+      }
     }
-  ]
-}`;
 
-    const payload = JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }]
-    });
+    var url = '/recipes/complexSearch?' + params.join('&');
 
-    const data = await callClaude(apiKey, payload);
-    const parsed = JSON.parse(data);
+    var data = await callSpoonacular(url);
+    var response = JSON.parse(data);
 
-    let responseText = '';
-    if (parsed.content) {
-      parsed.content.forEach(function(block) {
-        if (block.type === 'text') responseText += block.text;
+    if (response.status === 'failure' || response.code === 402) {
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({
+          suggestions: [],
+          error: 'Daily recommendation limit reached. Try again tomorrow.'
+        })
+      };
+    }
+
+    var suggestions = [];
+    if (response.results && response.results.length > 0) {
+      suggestions = response.results.map(function(r) {
+        return normalizeRecipe(r, profile);
       });
-    }
-
-    // Extract JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
-      return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify(result) };
     }
 
     return {
       statusCode: 200,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ suggestions: [], error: 'Could not generate recommendations' })
+      body: JSON.stringify({ suggestions: suggestions })
     };
 
   } catch (error) {
@@ -119,30 +118,163 @@ Return ONLY valid JSON in this exact format:
   }
 };
 
-function callClaude(apiKey, payload) {
-  return new Promise((resolve, reject) => {
-    const options = {
-      hostname: 'api.anthropic.com', port: 443,
-      path: '/v1/messages', method: 'POST',
+function normalizeRecipe(r, profile) {
+  // Strip HTML from summary
+  var description = (r.summary || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"');
+  // Truncate to first 2 sentences
+  var sentences = description.match(/[^.!?]+[.!?]+/g);
+  if (sentences && sentences.length > 2) {
+    description = sentences.slice(0, 2).join('').trim();
+  }
+
+  // Extract ingredients
+  var ingredients = [];
+  if (r.extendedIngredients) {
+    ingredients = r.extendedIngredients.map(function(ing) {
+      return ing.original || ing.originalString || '';
+    }).filter(Boolean);
+  }
+
+  // Extract instructions
+  var instructions = [];
+  if (r.analyzedInstructions && r.analyzedInstructions.length > 0) {
+    var steps = r.analyzedInstructions[0].steps || [];
+    instructions = steps.map(function(s) { return s.step; });
+  }
+
+  // Build cuisines string
+  var cuisine = '';
+  if (r.cuisines && r.cuisines.length > 0) {
+    cuisine = r.cuisines[0];
+  }
+
+  // Build dietary tags
+  var dietary = [];
+  if (r.vegetarian) dietary.push('vegetarian');
+  if (r.vegan) dietary.push('vegan');
+  if (r.glutenFree) dietary.push('gluten-free');
+  if (r.dairyFree) dietary.push('dairy-free');
+
+  // Meal type
+  var mealType = '';
+  if (r.dishTypes && r.dishTypes.length > 0) {
+    mealType = r.dishTypes[0];
+  }
+
+  // Difficulty estimate based on ready time and ingredient count
+  var difficulty = 'intermediate';
+  var readyTime = r.readyInMinutes || 0;
+  if (readyTime <= 20 && ingredients.length <= 8) {
+    difficulty = 'easy';
+  } else if (readyTime > 60 || ingredients.length > 15) {
+    difficulty = 'advanced';
+  }
+
+  // Generate a "why you'll like it" reason based on profile match
+  var whyReason = generateWhyReason(r, profile);
+
+  return {
+    title: r.title || '',
+    description: description,
+    image: r.image || '',
+    url: r.sourceUrl || '',
+    prepTime: r.preparationMinutes || 0,
+    cookTime: r.cookingMinutes || 0,
+    totalTime: readyTime,
+    servings: String(r.servings || ''),
+    cuisine: cuisine,
+    mealType: mealType,
+    difficulty: difficulty,
+    dietary: dietary,
+    ingredients: ingredients,
+    instructions: instructions,
+    tags: ['discovered'],
+    whyYoullLikeIt: whyReason
+  };
+}
+
+function generateWhyReason(recipe, profile) {
+  var reasons = [];
+
+  // Check cuisine match
+  if (profile.topCuisines && recipe.cuisines) {
+    var matchedCuisine = profile.topCuisines.find(function(c) {
+      return recipe.cuisines.some(function(rc) {
+        return rc.toLowerCase() === c.toLowerCase();
+      });
+    });
+    if (matchedCuisine) {
+      reasons.push('Matches your love of ' + matchedCuisine + ' cuisine');
+    }
+  }
+
+  // Check prep time match
+  if (profile.avgPrepTime && recipe.readyInMinutes) {
+    if (recipe.readyInMinutes <= profile.avgPrepTime) {
+      reasons.push('Quick to make at ' + recipe.readyInMinutes + ' minutes');
+    }
+  }
+
+  // Check ingredient overlap
+  if (profile.topIngredients && recipe.extendedIngredients) {
+    var matchedIngs = [];
+    profile.topIngredients.forEach(function(pi) {
+      recipe.extendedIngredients.forEach(function(ri) {
+        if ((ri.name || '').toLowerCase().indexOf(pi.toLowerCase()) !== -1) {
+          matchedIngs.push(pi);
+        }
+      });
+    });
+    if (matchedIngs.length > 0) {
+      reasons.push('Uses ingredients you love like ' + matchedIngs.slice(0, 2).join(' and '));
+    }
+  }
+
+  if (reasons.length === 0) {
+    if (recipe.veryPopular) {
+      reasons.push('A highly popular recipe worth trying');
+    } else if (recipe.healthScore && recipe.healthScore > 70) {
+      reasons.push('A healthy option with great flavor');
+    } else {
+      reasons.push('Something new to expand your recipe collection');
+    }
+  }
+
+  return reasons[0];
+}
+
+function callSpoonacular(path) {
+  return new Promise(function(resolve, reject) {
+    var options = {
+      hostname: 'api.spoonacular.com',
+      port: 443,
+      path: path,
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Length': Buffer.byteLength(payload)
+        'Accept': 'application/json'
       }
     };
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        if (res.statusCode >= 400) {
-          reject(new Error('Claude API returned ' + res.statusCode));
-        } else { resolve(body); }
+    var req = https.request(options, function(res) {
+      var body = '';
+      res.on('data', function(chunk) { body += chunk; });
+      res.on('end', function() {
+        if (res.statusCode === 402) {
+          resolve(JSON.stringify({ status: 'failure', code: 402 }));
+        } else if (res.statusCode >= 400) {
+          reject(new Error('Spoonacular API returned ' + res.statusCode + ': ' + body));
+        } else {
+          resolve(body);
+        }
       });
     });
     req.on('error', reject);
-    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Claude API timed out')); });
-    req.write(payload);
+    req.setTimeout(15000, function() { req.destroy(); reject(new Error('Spoonacular API timed out')); });
     req.end();
   });
 }
