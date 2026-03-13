@@ -151,6 +151,14 @@ function filterRecipes(recipes, filters) {
       if (filters.prepTime === 'medium' && (total <= 30 || total > 60)) return false;
       if (filters.prepTime === 'long' && total <= 60) return false;
     }
+    if (filters.source) {
+      var tags = r.tags || [];
+      if (filters.source === 'nyt-cooking') {
+        if (tags.indexOf('nyt-cooking') < 0) return false;
+      } else if (filters.source === 'other') {
+        if (tags.indexOf('nyt-cooking') >= 0) return false;
+      }
+    }
     if (filters.savedOnly) {
       if (!isRecipeSaved(r)) return false;
     }
@@ -245,6 +253,35 @@ function buildTasteProfile() {
   return profile;
 }
 
+// --- URL Deduplication ---
+
+function normalizeUrl(url) {
+  if (!url) return '';
+  try {
+    var u = new URL(url);
+    var normalized = u.protocol + '//' + u.hostname.replace(/^www\./, '') + u.pathname.replace(/\/+$/, '');
+    return normalized.toLowerCase();
+  } catch (e) {
+    return url.toLowerCase().replace(/\/+$/, '');
+  }
+}
+
+function findRecipeByUrl(url) {
+  if (!url) return null;
+  var normalized = normalizeUrl(url);
+  if (!normalized) return null;
+  for (var i = 0; i < allRecipes.length; i++) {
+    if (allRecipes[i].url && normalizeUrl(allRecipes[i].url) === normalized) {
+      return allRecipes[i];
+    }
+  }
+  return null;
+}
+
+function isNytCookingUrl(url) {
+  return url && url.indexOf('cooking.nytimes.com') >= 0;
+}
+
 // --- Import from URL ---
 
 function importRecipeFromUrl(urlOverride) {
@@ -253,11 +290,28 @@ function importRecipeFromUrl(urlOverride) {
   if (!url) return;
 
   var statusEl = document.getElementById('import-status');
+  var importBtn = document.getElementById('import-btn');
+
+  // Check for duplicate before fetching
+  var existing = findRecipeByUrl(url);
+  if (existing) {
+    var user = getCurrentUser();
+    if (existing.savedBy && existing.savedBy.indexOf(user) < 0) {
+      fbToggleSave(existing.id, user);
+      statusEl.className = 'import-status success';
+      statusEl.textContent = 'Already saved! Added to your collection.';
+    } else {
+      statusEl.className = 'import-status success';
+      statusEl.textContent = 'This recipe is already in your collection.';
+    }
+    statusEl.classList.remove('hidden');
+    return;
+  }
+
   statusEl.className = 'import-status loading';
   statusEl.textContent = 'Importing recipe...';
   statusEl.classList.remove('hidden');
 
-  var importBtn = document.getElementById('import-btn');
   if (importBtn) importBtn.disabled = true;
 
   fetch('/.netlify/functions/parse-recipe', {
@@ -399,6 +453,11 @@ function saveNewRecipe(event) {
     tags: document.getElementById('recipe-tags').value.split(',').map(function(t) { return t.trim(); }).filter(Boolean)
   };
 
+  // Auto-tag NYT Cooking recipes
+  if (isNytCookingUrl(recipeData.url) && recipeData.tags.indexOf('nyt-cooking') < 0) {
+    recipeData.tags.push('nyt-cooking');
+  }
+
   if (!recipeData.title) {
     showToast('Please enter a recipe title');
     return false;
@@ -427,6 +486,25 @@ function toggleBatchImport() {
   } else {
     section.classList.add('hidden');
     btn.textContent = 'Batch import multiple URLs';
+  }
+}
+
+function toggleNytImport() {
+  var section = document.getElementById('nyt-import-section');
+  var btn = document.getElementById('nyt-toggle-btn');
+  if (section.classList.contains('hidden')) {
+    section.classList.remove('hidden');
+    btn.textContent = 'Hide NYT import';
+    // Also show batch import since that's where they paste URLs
+    var batchSection = document.getElementById('batch-import-section');
+    var batchBtn = document.getElementById('batch-toggle-btn');
+    if (batchSection && batchSection.classList.contains('hidden')) {
+      batchSection.classList.remove('hidden');
+      batchBtn.textContent = 'Hide batch import';
+    }
+  } else {
+    section.classList.add('hidden');
+    btn.textContent = 'Import from NYT Cooking';
   }
 }
 
@@ -486,6 +564,20 @@ function startBatchImport() {
     item.el.className = 'batch-status-item loading';
     item.el.innerHTML = '<span class="batch-url-text">' + escapeHtml(truncateUrl(item.url)) + '</span><span>Importing...</span>';
 
+    // Check for duplicate before fetching
+    var existing = findRecipeByUrl(item.url);
+    if (existing) {
+      var user = getCurrentUser();
+      if (existing.savedBy && existing.savedBy.indexOf(user) < 0) {
+        fbToggleSave(existing.id, user);
+      }
+      item.el.className = 'batch-status-item success';
+      item.el.innerHTML = '<span class="batch-url-text">' + escapeHtml(existing.title || truncateUrl(item.url)) + '</span><span>Already saved</span>';
+      successCount++;
+      processNext(idx + 1);
+      return;
+    }
+
     fetch('/.netlify/functions/parse-recipe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -499,6 +591,12 @@ function startBatchImport() {
         failCount++;
         processNext(idx + 1);
         return;
+      }
+
+      // Auto-tag NYT Cooking recipes
+      var tags = data.tags || [];
+      if (isNytCookingUrl(item.url) && tags.indexOf('nyt-cooking') < 0) {
+        tags.push('nyt-cooking');
       }
 
       // Auto-save the recipe directly
@@ -518,7 +616,7 @@ function startBatchImport() {
         dietary: data.dietary || [],
         ingredients: data.ingredients || [],
         instructions: data.instructions || [],
-        tags: data.tags || []
+        tags: tags
       };
 
       addRecipe(recipeData).then(function() {

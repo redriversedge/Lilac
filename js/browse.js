@@ -9,7 +9,8 @@ var browseFilters = {
   difficulty: '',
   gathering: '',
   dietary: [],
-  prepTime: ''
+  prepTime: '',
+  source: ''
 };
 
 var browseSort = 'newest';
@@ -71,6 +72,13 @@ var FILTER_OPTIONS = {
       { value: 'paleo', label: 'Paleo' },
       { value: 'nut-free', label: 'Nut-Free' },
       { value: 'low-carb', label: 'Low-Carb' }
+    ]
+  },
+  source: {
+    label: 'Source',
+    options: [
+      { value: 'nyt-cooking', label: 'NYT Cooking' },
+      { value: 'other', label: 'Other' }
     ]
   }
 };
@@ -243,7 +251,8 @@ function clearAllFilters() {
     difficulty: '',
     gathering: '',
     dietary: [],
-    prepTime: ''
+    prepTime: '',
+    source: ''
   };
   renderCurrentView();
 }
@@ -256,5 +265,6 @@ function countActiveFilters() {
   if (browseFilters.gathering) count++;
   if (browseFilters.prepTime) count++;
   if (browseFilters.dietary && browseFilters.dietary.length > 0) count++;
+  if (browseFilters.source) count++;
   return count;
 }

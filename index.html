@@ -121,6 +121,18 @@
           <div id="import-status" class="import-status hidden"></div>
           <div class="batch-toggle-row">
             <button type="button" class="btn btn-ghost btn-sm" onclick="toggleBatchImport()" id="batch-toggle-btn">Batch import multiple URLs</button>
+            <button type="button" class="btn btn-ghost btn-sm nyt-import-toggle" onclick="toggleNytImport()" id="nyt-toggle-btn">Import from NYT Cooking</button>
+          </div>
+          <div id="nyt-import-section" class="nyt-import-section hidden">
+            <div class="nyt-import-instructions">
+              <h4>Import from NYT Cooking</h4>
+              <ol>
+                <li>Drag this link to your bookmarks bar: <a class="nyt-bookmarklet-link" href="javascript:void(function(){if(location.hostname!=='cooking.nytimes.com'){alert('Open your NYT Cooking recipe box first!');return}var t=document.createElement('div');t.style.cssText='position:fixed;top:20px;right:20px;background:%23333;color:%23fff;padding:12px 20px;border-radius:8px;z-index:99999;font:14px sans-serif';t.textContent='Scrolling to load all recipes...';document.body.appendChild(t);var last=0;function scroll(){window.scrollTo(0,document.body.scrollHeight);setTimeout(function(){if(document.body.scrollHeight>last){last=document.body.scrollHeight;scroll()}else{gather()}},1500)}function gather(){var links=document.querySelectorAll('a[href*=%22/recipes/%22]');var seen={};var urls=[];links.forEach(function(a){var h=a.href.split('?')[0];if(!seen[h]%26%26h.match(/\/recipes\/\d+/)){seen[h]=true;urls.push(h)}});if(urls.length===0){t.textContent='No recipes found. Make sure you are on your recipe box page.';setTimeout(function(){t.remove()},4000);return}navigator.clipboard.writeText(urls.join('\n')).then(function(){t.textContent='Copied '+urls.length+' recipe URLs!';setTimeout(function(){t.remove()},4000)}).catch(function(){var ta=document.createElement('textarea');ta.value=urls.join('\n');ta.style.cssText='position:fixed;top:60px;right:20px;width:400px;height:200px;z-index:99999';document.body.appendChild(ta);ta.select();t.textContent=urls.length+' URLs ready - copy from the box below';setTimeout(function(){t.remove()},10000)})}scroll()})();" onclick="event.preventDefault();alert('Drag this link to your bookmarks bar!')">Lilac NYT Export</a></li>
+                <li>Open <a href="https://cooking.nytimes.com/saved-recipes" target="_blank" rel="noopener">your NYT Cooking recipe box</a></li>
+                <li>Click the bookmarklet in your bookmarks bar</li>
+                <li>Come back here and paste the URLs into the batch import box below</li>
+              </ol>
+            </div>
           </div>
           <div id="batch-import-section" class="batch-section hidden">
             <label>Paste multiple recipe URLs (one per line)</label>

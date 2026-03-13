@@ -28,6 +28,9 @@ function renderRecipeCard(recipe) {
   if (recipe.cuisine) html += '<span class="recipe-card-badge">' + escapeHtml(recipe.cuisine) + '</span>';
   if (rating > 0) html += '<span>&#9733; ' + rating.toFixed(1) + '</span>';
   html += '</div>';
+  if (recipe.tags && recipe.tags.indexOf('nyt-cooking') >= 0) {
+    html += '<span class="nyt-badge">NYT</span>';
+  }
   if (recipe.addedBy) {
     html += '<div class="recipe-card-added-by">';
     html += '<span class="added-by"><span class="added-by-avatar">' + getUserInitial(recipe.addedBy) + '</span> ' + escapeHtml(recipe.addedBy) + '</span>';

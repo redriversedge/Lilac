@@ -16,6 +16,7 @@ function startGroceryListener() {
   if (unsubscribeGrocery) unsubscribeGrocery();
   unsubscribeGrocery = fbListenToGroceryList(function(data) {
     groceryData = data || { items: [], lastUpdated: null };
+    if (!groceryData.items) groceryData.items = [];
     updateGroceryBadge();
     if (!document.getElementById('grocery-overlay').classList.contains('hidden')) {
       renderGroceryList();
@@ -50,8 +51,9 @@ function addRecipeToGroceryList(recipeId) {
   }
 
   var user = getCurrentUser();
+  var currentItems = groceryData.items || [];
   var existingIngredients = {};
-  groceryData.items.forEach(function(item) {
+  currentItems.forEach(function(item) {
     existingIngredients[item.recipeId + '|' + item.ingredient.toLowerCase()] = true;
   });
 
@@ -75,7 +77,7 @@ function addRecipeToGroceryList(recipeId) {
   }
 
   var updated = {
-    items: groceryData.items.concat(newItems)
+    items: currentItems.concat(newItems)
   };
 
   fbSetGroceryList(updated).then(function() {

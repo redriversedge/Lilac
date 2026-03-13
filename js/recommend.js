@@ -77,30 +77,23 @@ function renderSuggestionTile(suggestion, index) {
   var totalTime = suggestion.totalTime || suggestion.prepTime || 0;
   var timeStr = totalTime > 0 ? totalTime + ' min' : '';
 
-  var html = '<div class="recipe-card suggestion-tile">';
+  var html = '<div class="recipe-card">';
   html += '<div class="recipe-card-wrapper">';
 
-  // Image area - clicking opens source URL
+  // Image area - matching Browse/Saved card style
   if (suggestion.image) {
-    html += '<a href="' + escapeHtml(suggestion.url) + '" target="_blank" rel="noopener" class="suggestion-tile-link">';
     html += '<img class="recipe-card-img" src="' + escapeHtml(suggestion.image) + '" alt="' + escapeHtml(suggestion.title) + '" loading="lazy" onerror="this.outerHTML=\'<div class=\\\'recipe-card-img-placeholder\\\'>&#127860;</div>\'">';
-    html += '</a>';
   } else {
     html += '<div class="recipe-card-img-placeholder">&#127860;</div>';
   }
+
+  // Save button overlay (matching the heart button style from Browse cards)
+  html += '<button class="recipe-card-save-btn" onclick="event.stopPropagation();saveSuggestion(' + index + ')" title="Save">&#9825;</button>';
   html += '</div>';
 
-  // Card body
+  // Card body - matching Browse/Saved layout
   html += '<div class="recipe-card-body">';
-
-  // Title links to source
-  if (suggestion.url) {
-    html += '<a href="' + escapeHtml(suggestion.url) + '" target="_blank" rel="noopener" class="suggestion-tile-title-link">';
-    html += '<div class="recipe-card-title">' + escapeHtml(suggestion.title || 'Untitled') + ' &#8599;</div>';
-    html += '</a>';
-  } else {
-    html += '<div class="recipe-card-title">' + escapeHtml(suggestion.title || 'Untitled') + '</div>';
-  }
+  html += '<div class="recipe-card-title">' + escapeHtml(suggestion.title || 'Untitled') + '</div>';
 
   // Metadata row
   html += '<div class="recipe-card-meta">';
@@ -116,7 +109,9 @@ function renderSuggestionTile(suggestion, index) {
 
   // Action buttons
   html += '<div class="suggestion-tile-actions">';
-  html += '<button class="btn btn-sm btn-accent" onclick="event.stopPropagation();saveSuggestion(' + index + ')">Save</button>';
+  if (suggestion.url) {
+    html += '<a href="' + escapeHtml(suggestion.url) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline" onclick="event.stopPropagation()">View &#8599;</a>';
+  }
   html += '<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();dismissSuggestion(' + index + ')">Dismiss</button>';
   html += '</div>';
 
