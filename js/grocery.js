@@ -44,14 +44,40 @@ function updateGroceryBadge() {
 }
 
 function addRecipeToGroceryList(recipeId) {
+  console.log('[Grocery] addRecipeToGroceryList called with:', recipeId);
+
   var recipe = getRecipeById(recipeId);
-  if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
-    showToast('No ingredients to add');
+  console.log('[Grocery] Recipe found:', !!recipe, recipe ? recipe.title : 'null');
+
+  if (!recipe) {
+    showToast('Recipe not found - try reopening it');
+    console.error('[Grocery] Recipe not found for id:', recipeId);
+    var btn = document.getElementById('add-to-list-btn');
+    if (btn) { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }
     return;
   }
 
+  if (!recipe.ingredients || recipe.ingredients.length === 0) {
+    showToast('This recipe has no ingredients listed');
+    console.warn('[Grocery] No ingredients for recipe:', recipe.title);
+    var btn = document.getElementById('add-to-list-btn');
+    if (btn) { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }
+    return;
+  }
+
+  console.log('[Grocery] Ingredients count:', recipe.ingredients.length);
+
   var user = getCurrentUser();
+  console.log('[Grocery] Current user:', user);
+
+  if (!user) {
+    showToast('Please select a user first');
+    return;
+  }
+
   var currentItems = groceryData.items || [];
+  console.log('[Grocery] Current grocery items:', currentItems.length);
+
   var existingIngredients = {};
   currentItems.forEach(function(item) {
     existingIngredients[item.recipeId + '|' + item.ingredient.toLowerCase()] = true;
@@ -76,15 +102,25 @@ function addRecipeToGroceryList(recipeId) {
     return;
   }
 
+  console.log('[Grocery] Adding', newItems.length, 'new items to list');
+
+  // Show immediate feedback
+  showToast('Adding ' + newItems.length + ' ingredients...');
+
   var updated = {
     items: currentItems.concat(newItems)
   };
 
   fbSetGroceryList(updated).then(function() {
+    console.log('[Grocery] Successfully saved to Firestore');
     showToast(newItems.length + ' ingredients added to list');
+    var btn = document.getElementById('add-to-list-btn');
+    if (btn) { btn.textContent = '\uD83D\uDED2 Added!'; setTimeout(function() { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }, 2000); }
   }).catch(function(err) {
-    showToast('Error adding ingredients to list');
-    console.error('Grocery list error:', err);
+    console.error('[Grocery] Firestore write FAILED:', err);
+    showToast('Error: ' + (err.message || 'Failed to save grocery list'));
+    var btn = document.getElementById('add-to-list-btn');
+    if (btn) { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }
   });
 }
 

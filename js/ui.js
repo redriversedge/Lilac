@@ -176,7 +176,7 @@ function openRecipeDetail(recipeId) {
   // Actions bar
   html += '<div class="recipe-actions">';
   html += '<button class="btn ' + (saved ? 'btn-accent' : 'btn-outline') + '" onclick="toggleSaveRecipe(\'' + recipe.id + '\');setTimeout(function(){openRecipeDetail(\'' + recipe.id + '\')},300)">' + (saved ? '&#9829; Saved' : '&#9825; Save') + '</button>';
-  html += '<button class="btn btn-secondary" onclick="addRecipeToGroceryList(\'' + recipe.id + '\')">&#128722; Add to List</button>';
+  html += '<button class="btn btn-secondary" id="add-to-list-btn" onclick="this.textContent=\'Adding...\';this.disabled=true;addRecipeToGroceryList(\'' + recipe.id + '\')">&#128722; Add to List</button>';
   var isCooked = cookedCount > 0;
   html += '<button class="btn ' + (isCooked ? 'btn-accent' : 'btn-secondary') + '" onclick="markRecipeCooked(\'' + recipe.id + '\');setTimeout(function(){openRecipeDetail(\'' + recipe.id + '\')},300)">' + (isCooked ? '&#9989; Cooked' : '&#127373; Cooked') + '</button>';
   html += '<button class="btn btn-ghost" onclick="confirmDeleteRecipe(\'' + recipe.id + '\')">&#128465;</button>';
