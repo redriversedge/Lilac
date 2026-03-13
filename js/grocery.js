@@ -150,6 +150,22 @@ function isPantryStaple(ingredient) {
 
 function openGroceryList() {
   document.getElementById('grocery-overlay').classList.remove('hidden');
+
+  // Always restart the listener to recover from any prior errors
+  startGroceryListener();
+
+  // Also do a one-time read as immediate fallback
+  fbGetGroceryList().then(function(data) {
+    if (data && data.items && data.items.length > 0) {
+      groceryData = data;
+      if (!groceryData.items) groceryData.items = [];
+      updateGroceryBadge();
+      renderGroceryList();
+    }
+  }).catch(function(err) {
+    console.error('[Grocery] Fallback read failed:', err);
+  });
+
   renderGroceryList();
 }
 

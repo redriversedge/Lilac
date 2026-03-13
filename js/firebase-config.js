@@ -148,5 +148,10 @@ function fbListenToGroceryList(callback) {
     }
   }, function(error) {
     console.error('Grocery list listener error:', error);
+    // Auto-retry after 3 seconds if listener fails
+    setTimeout(function() {
+      console.log('[Grocery] Retrying listener...');
+      startGroceryListener();
+    }, 3000);
   });
 }
