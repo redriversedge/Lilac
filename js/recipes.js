@@ -6,6 +6,10 @@
 var allRecipes = [];
 var unsubscribeRecipes = null;
 
+// Recently viewed cache
+var recentlyViewedData = [];
+var unsubscribeRecentlyViewed = null;
+
 // --- Start Real-Time Listener ---
 function startRecipeListener() {
   if (unsubscribeRecipes) unsubscribeRecipes();
@@ -25,6 +29,22 @@ function stopRecipeListener() {
 // Called whenever recipes change (re-render current view)
 function onRecipesUpdated() {
   renderCurrentView();
+}
+
+// --- Recently Viewed Listener ---
+
+function startRecentlyViewedListener() {
+  if (unsubscribeRecentlyViewed) unsubscribeRecentlyViewed();
+  unsubscribeRecentlyViewed = fbListenToRecentlyViewed(function(data) {
+    recentlyViewedData = (data && data.views) || [];
+    if (currentTab === 'home') renderCurrentView();
+  });
+}
+
+function recordRecipeView(recipeId) {
+  var user = getCurrentUser();
+  if (!user || !recipeId) return;
+  fbAddRecentView(recipeId, user);
 }
 
 // --- Recipe CRUD ---

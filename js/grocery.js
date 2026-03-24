@@ -18,8 +18,9 @@ function startGroceryListener() {
     groceryData = data || { items: [], lastUpdated: null };
     if (!groceryData.items) groceryData.items = [];
     updateGroceryBadge();
-    if (!document.getElementById('grocery-overlay').classList.contains('hidden')) {
-      renderGroceryList();
+    // Update tab view if active (full re-render to update header count too)
+    if (currentTab === 'grocery') {
+      renderCurrentView();
     }
   });
 }
@@ -149,28 +150,11 @@ function isPantryStaple(ingredient) {
 }
 
 function openGroceryList() {
-  document.getElementById('grocery-overlay').classList.remove('hidden');
-
-  // Always restart the listener to recover from any prior errors
-  startGroceryListener();
-
-  // Also do a one-time read as immediate fallback
-  fbGetGroceryList().then(function(data) {
-    if (data && data.items && data.items.length > 0) {
-      groceryData = data;
-      if (!groceryData.items) groceryData.items = [];
-      updateGroceryBadge();
-      renderGroceryList();
-    }
-  }).catch(function(err) {
-    console.error('[Grocery] Fallback read failed:', err);
-  });
-
-  renderGroceryList();
+  navigate('grocery');
 }
 
 function closeGroceryList() {
-  document.getElementById('grocery-overlay').classList.add('hidden');
+  // No-op: grocery is now a tab, not a modal
 }
 
 function renderGroceryList() {
@@ -258,5 +242,72 @@ function renderGroceryItems(items, dimmed) {
     html += '</li>';
   });
   html += '</ul>';
+  return html;
+}
+
+// --- Full-Page Grocery View (Tab) ---
+
+function renderGroceryView() {
+  var html = '<div class="grocery-view">';
+  html += '<div class="grocery-view-header">';
+  html += '<h1>Grocery List</h1>';
+
+  var items = groceryData.items || [];
+  var unchecked = items.filter(function(i) { return !i.checked; }).length;
+  if (items.length > 0) {
+    html += '<p>' + unchecked + ' item' + (unchecked !== 1 ? 's' : '') + ' remaining</p>';
+  }
+  html += '</div>';
+
+  html += '<div id="grocery-tab-content">';
+  html += renderGroceryTabContent();
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function renderGroceryTabContent() {
+  var items = groceryData.items || [];
+
+  if (items.length === 0) {
+    return '<div class="empty-state" style="padding:2rem">' +
+      '<div class="empty-state-icon">&#128722;</div>' +
+      '<h3>Grocery list is empty</h3>' +
+      '<p>Open a recipe and tap "Add to List" to start building your list.</p>' +
+      '</div>';
+  }
+
+  var regularItems = [];
+  var stapleItems = [];
+  items.forEach(function(item, idx) {
+    item._idx = idx;
+    if (isPantryStaple(item.ingredient)) {
+      stapleItems.push(item);
+    } else {
+      regularItems.push(item);
+    }
+  });
+
+  var html = '';
+
+  var checkedCount = items.filter(function(i) { return i.checked; }).length;
+  html += '<div class="grocery-actions">';
+  if (checkedCount > 0) {
+    html += '<button class="btn btn-sm btn-secondary" onclick="clearCheckedGroceryItems()">Clear Checked (' + checkedCount + ')</button>';
+  }
+  html += '<button class="btn btn-sm btn-ghost" onclick="if(confirm(\'Clear entire grocery list?\'))clearAllGroceryItems()">Clear All</button>';
+  html += '</div>';
+
+  html += renderGroceryGroup(regularItems);
+
+  if (stapleItems.length > 0) {
+    html += '<div class="grocery-section">';
+    html += '<h3 class="grocery-section-title pantry-title">Pantry Staples</h3>';
+    html += '<p class="grocery-section-subtitle">You may already have these</p>';
+    html += renderGroceryItems(stapleItems, true);
+    html += '</div>';
+  }
+
   return html;
 }

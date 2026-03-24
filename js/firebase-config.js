@@ -155,3 +155,45 @@ function fbListenToGroceryList(callback) {
     }, 3000);
   });
 }
+
+// --- Recently Viewed Firestore Helpers ---
+
+var recentlyViewedCollection = db.collection('recentlyViewed');
+var RECENTLY_VIEWED_DOC_ID = 'shared';
+var RECENTLY_VIEWED_MAX = 50;
+
+function fbListenToRecentlyViewed(callback) {
+  return recentlyViewedCollection.doc(RECENTLY_VIEWED_DOC_ID).onSnapshot(function(doc) {
+    if (doc.exists) {
+      callback(doc.data());
+    } else {
+      callback({ views: [] });
+    }
+  }, function(error) {
+    console.error('Recently viewed listener error:', error);
+  });
+}
+
+function fbAddRecentView(recipeId, userName) {
+  return recentlyViewedCollection.doc(RECENTLY_VIEWED_DOC_ID).get().then(function(doc) {
+    var data = doc.exists ? doc.data() : { views: [] };
+    var views = data.views || [];
+
+    // Remove existing entry for this recipe (dedup)
+    views = views.filter(function(v) { return v.recipeId !== recipeId; });
+
+    // Add to front
+    views.unshift({
+      recipeId: recipeId,
+      viewedBy: userName,
+      viewedAt: new Date().toISOString()
+    });
+
+    // Cap at max
+    if (views.length > RECENTLY_VIEWED_MAX) {
+      views = views.slice(0, RECENTLY_VIEWED_MAX);
+    }
+
+    return recentlyViewedCollection.doc(RECENTLY_VIEWED_DOC_ID).set({ views: views });
+  });
+}

@@ -18,18 +18,18 @@ Recipe discovery and meal planning app for Clifford and Michelle.
 
 ## Architecture
 
-Single-page app with tab-based navigation (Home, Browse, Discover, Saved). All state managed through global variables and Firestore real-time listeners.
+Single-page app with tab-based navigation (Home, Browse, Grocery, Saved). All state managed through global variables and Firestore real-time listeners.
 
 ### Key Files
 
 - `index.html` - Full app shell, modals, overlays
-- `js/firebase-config.js` - Firebase init + Firestore CRUD helpers (recipes + grocery list)
+- `js/firebase-config.js` - Firebase init + Firestore CRUD helpers (recipes, grocery list, recently viewed)
 - `js/auth.js` - Name-based user selection (Clifford / Michelle)
-- `js/recipes.js` - Recipe data layer (local cache, filtering, sorting, import, URL dedup, NYT batch import, taste profile)
+- `js/recipes.js` - Recipe data layer (local cache, filtering, sorting, import, URL dedup, NYT batch import, taste profile, recently viewed tracking)
 - `js/ui.js` - UI rendering (cards, grids, modals, toasts, NYT badge)
 - `js/browse.js` - Browse view with filters (cuisine, meal type, difficulty, source)
-- `js/recommend.js` - Discover tab (Spoonacular API results rendered as unified recipe cards)
-- `js/grocery.js` - Shared grocery list (Firestore sync, pantry staple detection, auto-retry listener)
+- `js/recommend.js` - Discover tab (inactive, kept as dead code; was Spoonacular API recipe discovery)
+- `js/grocery.js` - Shared grocery list tab + Firestore sync (pantry staple detection, auto-retry listener)
 - `js/app.js` - Navigation, home view, collection view, init
 - `js/theme.js` - Dark mode toggle
 - `css/lilac.css` - All styles
@@ -49,13 +49,17 @@ Grocery list stored in Firestore `groceryList` collection, single `shared` docum
 - items: array of { ingredient, recipeId, recipeTitle, addedBy, checked }
 - lastUpdated: timestamp
 
-Firestore security rules must include both `recipes` and `groceryList` collections.
+Recently viewed stored in Firestore `recentlyViewed` collection, single `shared` document:
+- views: array of { recipeId, viewedBy, viewedAt } (capped at 50, deduped by recipeId)
+- Shared across both users: either user's views appear for both
+
+Firestore security rules must include `recipes`, `groceryList`, and `recentlyViewed` collections.
 
 ## Environment
 
 - Firebase config is in `js/firebase-config.js` (client-side, public)
 - `ANTHROPIC_API_KEY` must be set in Netlify site environment variables
-- `SPOONACULAR_API_KEY` must be set in Netlify site environment variables (Discover tab)
+- `SPOONACULAR_API_KEY` must be set in Netlify site environment variables (Discover tab, currently inactive)
 - No `.env` file needed locally for basic dev (just open index.html)
 - No build step required
 
@@ -79,16 +83,13 @@ Imported NYT recipes are auto-tagged `nyt-cooking` and get an NYT badge on cards
 
 Browse tab has a Source filter to show only NYT Cooking recipes or exclude them.
 
-## Discover Tab
-
-Uses Spoonacular API for recipe discovery. Tiles are rendered with the same card style as Browse/Saved tabs (image, heart overlay save button, metadata). Recommendations are influenced by the user's taste profile.
-
 ## Grocery List
 
+- Grocery list is a full tab in the bottom nav (not a modal)
 - Add to List button on recipe detail adds all ingredients in one click (no selection step)
 - Items grouped by recipe, pantry staples shown separately
-- Firestore listener auto-retries on error; openGroceryList() does a direct read as fallback
-- Requires `groceryList` collection in Firestore security rules
+- Firestore listener auto-retries on error
+- Badge on nav tab shows unchecked item count
 
 ## Recent Features
 
@@ -105,3 +106,10 @@ Shipped 2026-03-13:
 - Discover tab tiles redesigned to match Browse/Saved card style
 - Add to List button fixed (Firestore rules + listener recovery)
 - Grocery list listener auto-retry and fallback read on open
+
+Shipped 2026-03-24:
+- Recently Viewed section on Home tab (shared across both users via Firestore)
+- Grocery list moved from header modal to full bottom nav tab
+- Discover tab removed (4 tabs: Home, Browse, Grocery, Saved)
+- Fixed modal overflow/white space on desktop
+- Branding updated: "lilac" capitalized to "Lilac" in header and auth screen

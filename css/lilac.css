@@ -1713,7 +1713,8 @@ select {
 
   .overlay {
     align-items: center;
-    padding: 1rem;
+    padding: 0;
+    overflow: hidden;
   }
 
   .search-modal {
@@ -1794,6 +1795,45 @@ select {
 .grocery-modal {
   max-height: 92vh;
   max-height: 92dvh;
+}
+
+.grocery-nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  line-height: 1;
+}
+
+/* --- GROCERY TAB VIEW --- */
+.grocery-view {
+  padding: 1rem 1.25rem;
+  padding-bottom: 5rem;
+}
+
+.grocery-view-header {
+  margin-bottom: 1rem;
+}
+
+.grocery-view-header h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.25rem;
+}
+
+.grocery-view-header p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  margin: 0;
 }
 
 .grocery-actions {

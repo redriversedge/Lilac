@@ -36,8 +36,8 @@ function renderCurrentView() {
     case 'browse':
       content.innerHTML = renderBrowseView();
       break;
-    case 'discover':
-      content.innerHTML = renderDiscoverView();
+    case 'grocery':
+      content.innerHTML = renderGroceryView();
       break;
     case 'collection':
       content.innerHTML = renderCollectionView();
@@ -75,6 +75,30 @@ function renderHomeView() {
     html += '<button class="quick-filter" onclick="quickFilter(\'difficulty\',\'easy\')">Easy</button>';
     html += '</div>';
     html += '</div>';
+  }
+
+  // Recently viewed (shared across both users)
+  if (recentlyViewedData.length > 0 && allRecipes.length > 0) {
+    var recentViewedRecipes = [];
+    var seenIds = {};
+    for (var i = 0; i < recentlyViewedData.length && recentViewedRecipes.length < 8; i++) {
+      var viewEntry = recentlyViewedData[i];
+      if (!seenIds[viewEntry.recipeId]) {
+        var viewedRecipe = getRecipeById(viewEntry.recipeId);
+        if (viewedRecipe) {
+          recentViewedRecipes.push(viewedRecipe);
+          seenIds[viewEntry.recipeId] = true;
+        }
+      }
+    }
+    if (recentViewedRecipes.length > 0) {
+      html += '<div class="home-section">';
+      html += '<div class="section-header">';
+      html += '<h2>Recently Viewed</h2>';
+      html += '</div>';
+      html += renderHorizontalScroll(recentViewedRecipes);
+      html += '</div>';
+    }
   }
 
   // Recently added
@@ -198,6 +222,7 @@ function shuffleRecipe() {
 function initApp() {
   startRecipeListener();
   startGroceryListener();
+  startRecentlyViewedListener();
   updateUserAvatar(getCurrentUser());
   renderCurrentView();
 }

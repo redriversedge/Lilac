@@ -69,6 +69,8 @@ function openRecipeDetail(recipeId) {
   var recipe = getRecipeById(recipeId);
   if (!recipe) return;
 
+  recordRecipeView(recipeId);
+
   var overlay = document.getElementById('recipe-detail-overlay');
   var content = document.getElementById('recipe-detail-content');
   var myRating = getMyRating(recipe);
