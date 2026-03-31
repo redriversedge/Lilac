@@ -39,6 +39,9 @@ function renderCurrentView() {
     case 'grocery':
       content.innerHTML = renderGroceryView();
       break;
+    case 'meals':
+      content.innerHTML = renderMealsView();
+      break;
     case 'collection':
       content.innerHTML = renderCollectionView();
       break;
@@ -222,6 +225,7 @@ function shuffleRecipe() {
 function initApp() {
   startRecipeListener();
   startGroceryListener();
+  startMealsListener();
   startRecentlyViewedListener();
   updateUserAvatar(getCurrentUser());
   renderCurrentView();

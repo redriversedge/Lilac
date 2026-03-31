@@ -156,6 +156,35 @@ function fbListenToGroceryList(callback) {
   });
 }
 
+// --- Weekly Meals Firestore Helpers ---
+
+var mealsCollection = db.collection('weeklyMeals');
+var MEALS_DOC_ID = 'shared';
+
+function fbGetWeeklyMeals() {
+  return mealsCollection.doc(MEALS_DOC_ID).get().then(function(doc) {
+    if (doc.exists) return doc.data();
+    return { recipes: [], lastUpdated: null };
+  });
+}
+
+function fbSetWeeklyMeals(data) {
+  data.lastUpdated = firebase.firestore.FieldValue.serverTimestamp();
+  return mealsCollection.doc(MEALS_DOC_ID).set(data);
+}
+
+function fbListenToWeeklyMeals(callback) {
+  return mealsCollection.doc(MEALS_DOC_ID).onSnapshot(function(doc) {
+    if (doc.exists) {
+      callback(doc.data());
+    } else {
+      callback({ recipes: [], lastUpdated: null });
+    }
+  }, function(error) {
+    console.error('Weekly meals listener error:', error);
+  });
+}
+
 // --- Recently Viewed Firestore Helpers ---
 
 var recentlyViewedCollection = db.collection('recentlyViewed');

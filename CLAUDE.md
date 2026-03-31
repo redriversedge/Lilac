@@ -18,7 +18,7 @@ Recipe discovery and meal planning app for Clifford and Michelle.
 
 ## Architecture
 
-Single-page app with tab-based navigation (Home, Browse, Grocery, Saved). All state managed through global variables and Firestore real-time listeners.
+Single-page app with tab-based navigation (Home, Browse, Grocery, Meals, Saved). All state managed through global variables and Firestore real-time listeners.
 
 ### Key Files
 
@@ -30,6 +30,7 @@ Single-page app with tab-based navigation (Home, Browse, Grocery, Saved). All st
 - `js/browse.js` - Browse view with filters (cuisine, meal type, difficulty, source)
 - `js/recommend.js` - Discover tab (inactive, kept as dead code; was Spoonacular API recipe discovery)
 - `js/grocery.js` - Shared grocery list tab + Firestore sync (pantry staple detection, auto-retry listener)
+- `js/meals.js` - Meals This Week tab + Firestore sync (shared weekly meal plan)
 - `js/app.js` - Navigation, home view, collection view, init
 - `js/theme.js` - Dark mode toggle
 - `css/lilac.css` - All styles
@@ -53,7 +54,12 @@ Recently viewed stored in Firestore `recentlyViewed` collection, single `shared`
 - views: array of { recipeId, viewedBy, viewedAt } (capped at 50, deduped by recipeId)
 - Shared across both users: either user's views appear for both
 
-Firestore security rules must include `recipes`, `groceryList`, and `recentlyViewed` collections.
+Weekly meals stored in Firestore `weeklyMeals` collection, single `shared` document:
+- recipes: array of { recipeId, title, image, cuisine, totalTime, addedBy, addedAt }
+- lastUpdated: timestamp
+- Shared across both users: either user can add/remove meals
+
+Firestore security rules must include `recipes`, `groceryList`, `recentlyViewed`, and `weeklyMeals` collections.
 
 ## Environment
 
@@ -110,6 +116,12 @@ Shipped 2026-03-13:
 Shipped 2026-03-24:
 - Recently Viewed section on Home tab (shared across both users via Firestore)
 - Grocery list moved from header modal to full bottom nav tab
-- Discover tab removed (4 tabs: Home, Browse, Grocery, Saved)
+- Discover tab removed (tabs: Home, Browse, Grocery, Saved)
 - Fixed modal overflow/white space on desktop
 - Branding updated: "lilac" capitalized to "Lilac" in header and auth screen
+
+Shipped 2026-03-30:
+- Meals This Week tab: shared weekly meal planning (5 tabs: Home, Browse, Grocery, Meals, Saved)
+- "Cook this Week" button on recipe detail to add/remove from weekly plan
+- Clear All and per-recipe remove on Meals tab
+- Badge on Meals nav tab shows planned meal count
