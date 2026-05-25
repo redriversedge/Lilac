@@ -75,6 +75,10 @@
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+  max-width: 100%;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 body {
@@ -83,6 +87,9 @@ body {
   color: var(--text-primary);
   line-height: 1.5;
   overflow-x: hidden;
+  max-width: 100%;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -102,7 +109,7 @@ a:hover {
   color: var(--accent-hover);
 }
 
-img {
+img, video, iframe {
   max-width: 100%;
   height: auto;
 }
@@ -161,6 +168,7 @@ select {
   align-items: center;
   gap: 0.75rem;
   padding: 0.625rem 1rem;
+  padding-top: calc(0.625rem + env(safe-area-inset-top));
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
@@ -1249,7 +1257,7 @@ select {
 .browse-header {
   padding: 1rem;
   position: sticky;
-  top: 52px;
+  top: calc(52px + env(safe-area-inset-top));
   background: var(--bg-base);
   z-index: 50;
   border-bottom: 1px solid var(--border-light);
@@ -1346,6 +1354,7 @@ select {
   top: calc(100% + 0.25rem);
   left: 0;
   min-width: 200px;
+  max-width: calc(100vw - 2rem);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
