@@ -126,7 +126,16 @@
             <button class="btn btn-accent" onclick="importRecipeFromUrl()" id="import-btn">Import</button>
           </div>
           <div id="import-status" class="import-status hidden"></div>
+          <div id="paste-text-section" class="paste-text-section hidden">
+            <label for="recipe-paste-input">Paste recipe text</label>
+            <p class="paste-text-hint">Open the recipe in your browser, select all of the page text (ingredients and steps), copy it, and paste it here.</p>
+            <textarea id="recipe-paste-input" rows="6" placeholder="Paste the recipe page text here..."></textarea>
+            <div class="batch-actions">
+              <button type="button" class="btn btn-accent" onclick="importRecipeFromText()" id="paste-import-btn">Extract Recipe</button>
+            </div>
+          </div>
           <div class="batch-toggle-row">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="togglePasteText()" id="paste-toggle-btn">Paste recipe text</button>
             <button type="button" class="btn btn-ghost btn-sm" onclick="toggleBatchImport()" id="batch-toggle-btn">Batch import multiple URLs</button>
             <button type="button" class="btn btn-ghost btn-sm nyt-import-toggle" onclick="toggleNytImport()" id="nyt-toggle-btn">Import from NYT Cooking</button>
           </div>

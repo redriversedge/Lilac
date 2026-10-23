@@ -21,85 +21,140 @@ exports.handler = async function(event) {
   }
 
   try {
-    const { url } = JSON.parse(event.body);
-    if (!url) {
-      return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: 'URL required' }) };
+    const body = JSON.parse(event.body || '{}');
+    const rawUrl = (body.url || '').trim();
+    const pastedText = (body.text || '').trim();
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+
+    // Pasted-text mode: user copied the recipe page text (fallback when a site blocks server fetches)
+    if (pastedText) {
+      if (!apiKey) return respond(200, { error: 'AI extraction is not configured (ANTHROPIC_API_KEY missing).' });
+      const fromText = await extractWithAI(apiKey, pastedText.substring(0, 12000), rawUrl || 'pasted text');
+      return respond(200, fromText);
     }
 
-    // Fetch the page HTML
-    const html = await fetchUrl(url);
+    if (!rawUrl) return respond(400, { error: 'URL required' });
+    const url = cleanUrl(rawUrl);
 
-    // Try JSON-LD extraction first
+    // Fetch the page HTML
+    const page = await fetchUrl(url);
+    const html = page.body || '';
+    const isNyt = /(^|\.)nytimes\.com$/i.test(safeHostname(url));
+
+    // Try JSON-LD extraction first (works even on many soft-paywalled pages)
     const jsonLdRecipe = extractJsonLd(html);
     if (jsonLdRecipe) {
-      return {
-        statusCode: 200,
-        headers: CORS_HEADERS,
-        body: JSON.stringify(normalizeRecipe(jsonLdRecipe, url))
-      };
+      return respond(200, normalizeRecipe(jsonLdRecipe, url));
+    }
+
+    // Blocked / bot wall / error page: don't feed it to the AI, tell the user clearly
+    if (page.status >= 400 || looksBlocked(html)) {
+      console.error('Fetch blocked or failed:', page.status, url);
+      return respond(200, {
+        error: (isNyt ? 'NYT Cooking blocked the import' : 'The site blocked the import') +
+          ' (HTTP ' + page.status + '). Use "Paste recipe text" below instead.',
+        code: 'blocked'
+      });
     }
 
     // Fallback to AI extraction
-    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return {
-        statusCode: 200,
-        headers: CORS_HEADERS,
-        body: JSON.stringify({
-          error: 'Could not auto-detect recipe data and AI extraction is not configured. Please enter details manually.'
-        })
-      };
+      return respond(200, {
+        error: 'Could not auto-detect recipe data and AI extraction is not configured. Please enter details manually.'
+      });
     }
 
-    const aiRecipe = await extractWithAI(apiKey, html, url);
-    return {
-      statusCode: 200,
-      headers: CORS_HEADERS,
-      body: JSON.stringify(aiRecipe)
-    };
+    const aiRecipe = await extractWithAI(apiKey, htmlToText(html).substring(0, 10000), url, findOgImage(html));
+    return respond(200, aiRecipe);
 
   } catch (error) {
     console.error('Parse recipe error:', error.message);
-    return {
-      statusCode: 500,
-      headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'Failed to parse recipe: ' + error.message })
-    };
+    return respond(500, { error: 'Failed to parse recipe: ' + error.message, code: 'failed' });
   }
 };
 
+function respond(statusCode, obj) {
+  return { statusCode: statusCode, headers: CORS_HEADERS, body: JSON.stringify(obj) };
+}
+
+function safeHostname(url) {
+  try { return new URL(url).hostname; } catch (e) { return ''; }
+}
+
+// Strip tracking params (smid, utm_*, etc.) but keep access params like unlocked_article_code
+function cleanUrl(url) {
+  try {
+    const u = new URL(url);
+    const drop = [];
+    u.searchParams.forEach(function(v, k) {
+      if (/^(utm_|smid$|smtyp$|fbclid$|gclid$|mc_|ref$|campaign_id$|emc$|instance_id$|nl$|regi_id$|segment_id$|te$|user_id$)/i.test(k)) drop.push(k);
+    });
+    drop.forEach(function(k) { u.searchParams.delete(k); });
+    u.hash = '';
+    return u.toString();
+  } catch (e) {
+    return url;
+  }
+}
+
+function looksBlocked(html) {
+  if (!html || html.length < 500) return true;
+  return /captcha-delivery\.com|datadome|perimeterx|px-captcha|cf-chl-|Attention Required|Access Denied|Please enable JS and disable any ad blocker/i.test(html.substring(0, 20000));
+}
+
+function findOgImage(html) {
+  const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+            html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  return m ? decodeEntities(m[1]) : '';
+}
+
 // --- Fetch URL content ---
-function fetchUrl(url, redirectCount) {
+// Returns { status, body }. Sends browser-like headers (many recipe sites, including
+// NYT Cooking, reject unknown bot user agents), handles gzip/brotli, and carries
+// cookies across redirects.
+const zlib = require('zlib');
+
+function fetchUrl(url, redirectCount, cookies) {
   redirectCount = redirectCount || 0;
-  if (redirectCount > 5) return Promise.reject(new Error('Too many redirects'));
+  cookies = cookies || [];
+  if (redirectCount > 6) return Promise.reject(new Error('Too many redirects'));
 
   return new Promise((resolve, reject) => {
     const protocol = url.startsWith('https') ? https : http;
-    const options = {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; LilacBot/1.0)',
-        'Accept': 'text/html,application/xhtml+xml'
-      }
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br'
     };
+    if (cookies.length) headers['Cookie'] = cookies.join('; ');
 
-    const req = protocol.get(url, options, (res) => {
+    const req = protocol.get(url, { headers: headers }, (res) => {
+      const setCookie = res.headers['set-cookie'] || [];
+      const jar = cookies.concat(setCookie.map(function(c) { return c.split(';')[0]; }));
+
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        let redirectUrl = res.headers.location;
-        if (redirectUrl.startsWith('/')) {
-          const u = new URL(url);
-          redirectUrl = u.origin + redirectUrl;
-        }
-        resolve(fetchUrl(redirectUrl, redirectCount + 1));
+        res.resume();
+        const redirectUrl = new URL(res.headers.location, url).toString();
+        resolve(fetchUrl(redirectUrl, redirectCount + 1, jar));
         return;
       }
 
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => resolve(body));
+      let stream = res;
+      const enc = (res.headers['content-encoding'] || '').toLowerCase();
+      if (enc === 'gzip') stream = res.pipe(zlib.createGunzip());
+      else if (enc === 'deflate') stream = res.pipe(zlib.createInflate());
+      else if (enc === 'br') stream = res.pipe(zlib.createBrotliDecompress());
+
+      const chunks = [];
+      stream.on('data', (chunk) => chunks.push(chunk));
+      stream.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString('utf8') }));
+      stream.on('error', reject);
     });
 
     req.on('error', reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Request timed out')); });
+    req.setTimeout(8000, () => { req.destroy(); reject(new Error('The recipe site took too long to respond')); });
   });
 }
 
@@ -110,31 +165,53 @@ function extractJsonLd(html) {
 
   while ((match = regex.exec(html)) !== null) {
     try {
-      let data = JSON.parse(match[1].trim());
-
-      // Handle arrays
-      if (Array.isArray(data)) {
-        for (let item of data) {
-          if (isRecipeType(item)) return item;
-          if (item['@graph'] && Array.isArray(item['@graph'])) {
-            for (let g of item['@graph']) {
-              if (isRecipeType(g)) return g;
-            }
-          }
-        }
-      } else {
-        if (isRecipeType(data)) return data;
-        if (data['@graph'] && Array.isArray(data['@graph'])) {
-          for (let g of data['@graph']) {
-            if (isRecipeType(g)) return g;
-          }
-        }
-      }
+      const found = findRecipeNode(JSON.parse(match[1].trim()), 0);
+      if (found) return found;
     } catch (e) {
       // Skip invalid JSON
     }
   }
   return null;
+}
+
+function findRecipeNode(node, depth) {
+  if (!node || depth > 5 || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const r = findRecipeNode(item, depth + 1);
+      if (r) return r;
+    }
+    return null;
+  }
+  if (isRecipeType(node)) return node;
+  return findRecipeNode(node['@graph'], depth + 1) || findRecipeNode(node.mainEntity, depth + 1);
+}
+
+function decodeEntities(str) {
+  if (typeof str !== 'string') return str;
+  return str
+    .replace(/&#(\d+);/g, function(_, n) { return String.fromCharCode(parseInt(n, 10)); })
+    .replace(/&#x([0-9a-f]+);/gi, function(_, n) { return String.fromCharCode(parseInt(n, 16)); })
+    .replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'")
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&');
+}
+
+function cleanText(str) {
+  return decodeEntities(String(str || '')).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function htmlToText(html) {
+  return decodeEntities(html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+    .replace(/<header[\s\S]*?<\/header>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function isRecipeType(obj) {
@@ -148,8 +225,8 @@ function isRecipeType(obj) {
 // --- Normalize JSON-LD recipe to our format ---
 function normalizeRecipe(ld, sourceUrl) {
   const recipe = {
-    title: ld.name || '',
-    description: ld.description || '',
+    title: cleanText(ld.name),
+    description: cleanText(ld.description),
     image: '',
     prepTime: parseDuration(ld.prepTime),
     cookTime: parseDuration(ld.cookTime),
@@ -173,7 +250,7 @@ function normalizeRecipe(ld, sourceUrl) {
 
   // Servings
   if (ld.recipeYield) {
-    recipe.servings = Array.isArray(ld.recipeYield) ? ld.recipeYield[0] : String(ld.recipeYield);
+    recipe.servings = String(Array.isArray(ld.recipeYield) ? ld.recipeYield[0] : ld.recipeYield).replace(/\s*servings?$/i, '').trim();
   }
 
   // Cuisine
@@ -189,22 +266,26 @@ function normalizeRecipe(ld, sourceUrl) {
 
   // Ingredients
   if (ld.recipeIngredient && Array.isArray(ld.recipeIngredient)) {
-    recipe.ingredients = ld.recipeIngredient;
+    recipe.ingredients = ld.recipeIngredient.map(cleanText).filter(Boolean);
   }
 
-  // Instructions
+  // Instructions (strings, HowToStep objects, or HowToSection groups)
   if (ld.recipeInstructions) {
     if (typeof ld.recipeInstructions === 'string') {
-      recipe.instructions = ld.recipeInstructions.split(/\n+/).filter(Boolean);
+      recipe.instructions = ld.recipeInstructions.split(/\n+/).map(cleanText).filter(Boolean);
     } else if (Array.isArray(ld.recipeInstructions)) {
-      recipe.instructions = ld.recipeInstructions.map(function(step) {
-        if (typeof step === 'string') return step;
-        if (step.text) return step.text;
-        if (step['@type'] === 'HowToSection' && step.itemListElement) {
-          return step.itemListElement.map(function(s) { return s.text || ''; }).join(' ');
+      ld.recipeInstructions.forEach(function(step) {
+        if (typeof step === 'string') { recipe.instructions.push(cleanText(step)); return; }
+        if (step && Array.isArray(step.itemListElement)) {
+          step.itemListElement.forEach(function(s) {
+            const t = cleanText(typeof s === 'string' ? s : (s.text || s.name));
+            if (t) recipe.instructions.push(t);
+          });
+          return;
         }
-        return '';
-      }).filter(Boolean);
+        if (step && (step.text || step.name)) recipe.instructions.push(cleanText(step.text || step.name));
+      });
+      recipe.instructions = recipe.instructions.filter(Boolean);
     }
   }
 
@@ -302,20 +383,11 @@ function mapDietary(diet) {
 }
 
 // --- AI Extraction Fallback ---
-async function extractWithAI(apiKey, html, url) {
-  // Trim HTML to reduce token usage
-  const trimmed = html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<nav[\s\S]*?<\/nav>/gi, '')
-    .replace(/<footer[\s\S]*?<\/footer>/gi, '')
-    .replace(/<header[\s\S]*?<\/header>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .substring(0, 8000);
+// Model is configurable via LILAC_AI_MODEL; defaults to a fast model so the call
+// fits inside Netlify's synchronous function time limit.
+const AI_MODEL = process.env.LILAC_AI_MODEL || 'claude-haiku-5-5';
 
+async function extractWithAI(apiKey, text, url, fallbackImage) {
   const prompt = `Extract recipe data from this webpage content. Return ONLY valid JSON with these fields:
 {
   "title": "recipe name",
@@ -334,12 +406,13 @@ async function extractWithAI(apiKey, html, url) {
   "instructions": ["array of instruction steps"],
   "tags": ["array of tags"]
 }
+If the content does not contain a recipe, return {"error": "No recipe found on this page"}.
 
 Webpage content from ${url}:
-${trimmed}`;
+${text}`;
 
   const payload = JSON.stringify({
-    model: 'claude-sonnet-4-20250514',
+    model: AI_MODEL,
     max_tokens: 2048,
     messages: [{ role: 'user', content: prompt }]
   });
@@ -354,10 +427,14 @@ ${trimmed}`;
     });
   }
 
-  // Extract JSON from response
   const jsonMatch = responseText.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
+    const result = JSON.parse(jsonMatch[0]);
+    if (!result.error && !result.image && fallbackImage) result.image = fallbackImage;
+    if (!result.error && (!result.ingredients || !result.ingredients.length)) {
+      return { error: 'No ingredients found. Try "Paste recipe text" instead.', code: 'empty' };
+    }
+    return result;
   }
 
   return { error: 'Could not extract recipe data' };
@@ -380,12 +457,14 @@ function callClaude(apiKey, payload) {
       res.on('data', (chunk) => body += chunk);
       res.on('end', () => {
         if (res.statusCode >= 400) {
-          reject(new Error('Claude API returned ' + res.statusCode));
+          let msg = '';
+          try { msg = JSON.parse(body).error.message; } catch (e) {}
+          reject(new Error('Claude API returned ' + res.statusCode + (msg ? ' (' + msg + ')' : '')));
         } else { resolve(body); }
       });
     });
     req.on('error', reject);
-    req.setTimeout(30000, () => { req.destroy(); reject(new Error('Claude API timed out')); });
+    req.setTimeout(20000, () => { req.destroy(); reject(new Error('Claude API timed out')); });
     req.write(payload);
     req.end();
   });

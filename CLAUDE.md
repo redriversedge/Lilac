@@ -65,6 +65,7 @@ Firestore security rules must include `recipes`, `groceryList`, `recentlyViewed`
 
 - Firebase config is in `js/firebase-config.js` (client-side, public)
 - `ANTHROPIC_API_KEY` must be set in Netlify site environment variables
+- `LILAC_AI_MODEL` (optional) overrides the model used by parse-recipe AI extraction (default `claude-haiku-5-5`, chosen for speed under Netlify's function time limit)
 - `SPOONACULAR_API_KEY` must be set in Netlify site environment variables (Discover tab, currently inactive)
 - No `.env` file needed locally for basic dev (just open index.html)
 - No build step required
@@ -125,3 +126,10 @@ Shipped 2026-03-30:
 - "Cook this Week" button on recipe detail to add/remove from weekly plan
 - Clear All and per-recipe remove on Meals tab
 - Badge on Meals nav tab shows planned meal count
+
+Shipped 2026-10-23:
+- URL import hardened: browser-like request headers, gzip/brotli, cookie-carrying redirects, tracking params stripped (keeps `unlocked_article_code`), nested JSON-LD (`mainEntity`), HTML entity cleanup, explicit "blocked" error instead of feeding bot-wall pages to the AI
+- "Paste recipe text" fallback: AI extracts a recipe from copied page text (`parse-recipe` accepts `{ text }`)
+- Client handles non-JSON (timeout/502) responses from functions
+- Recipe detail is a full-screen sheet on phones; action bar is five compact icon+label buttons (fixes sideways overflow / empty space around the sheet)
+

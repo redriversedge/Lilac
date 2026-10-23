@@ -3,7 +3,7 @@
 // Caches core assets for offline support
 // ============================================================
 
-var CACHE_NAME = 'lilac-v1.0';
+var CACHE_NAME = 'lilac-v1.1';
 var CORE_ASSETS = [
   '/',
   '/index.html',

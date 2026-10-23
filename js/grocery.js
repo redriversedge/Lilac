@@ -53,16 +53,14 @@ function addRecipeToGroceryList(recipeId) {
   if (!recipe) {
     showToast('Recipe not found - try reopening it');
     console.error('[Grocery] Recipe not found for id:', recipeId);
-    var btn = document.getElementById('add-to-list-btn');
-    if (btn) { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }
+    setAddToListLabel('Add to List', false);
     return;
   }
 
   if (!recipe.ingredients || recipe.ingredients.length === 0) {
     showToast('This recipe has no ingredients listed');
     console.warn('[Grocery] No ingredients for recipe:', recipe.title);
-    var btn = document.getElementById('add-to-list-btn');
-    if (btn) { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }
+    setAddToListLabel('Add to List', false);
     return;
   }
 
@@ -115,13 +113,11 @@ function addRecipeToGroceryList(recipeId) {
   fbSetGroceryList(updated).then(function() {
     console.log('[Grocery] Successfully saved to Firestore');
     showToast(newItems.length + ' ingredients added to list');
-    var btn = document.getElementById('add-to-list-btn');
-    if (btn) { btn.textContent = '\uD83D\uDED2 Added!'; setTimeout(function() { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }, 2000); }
+    setAddToListLabel('Added!', true); setTimeout(function() { setAddToListLabel('Add to List', false); }, 2000);
   }).catch(function(err) {
     console.error('[Grocery] Firestore write FAILED:', err);
     showToast('Error: ' + (err.message || 'Failed to save grocery list'));
-    var btn = document.getElementById('add-to-list-btn');
-    if (btn) { btn.textContent = '\uD83D\uDED2 Add to List'; btn.disabled = false; }
+    setAddToListLabel('Add to List', false);
   });
 }
 
@@ -310,4 +306,14 @@ function renderGroceryTabContent() {
   }
 
   return html;
+}
+
+// Update the Add to List action button label without wiping its icon
+function setAddToListLabel(label, disabled) {
+  var btn = document.getElementById('add-to-list-btn');
+  if (!btn) return;
+  var labelEl = btn.querySelector('.action-label');
+  if (labelEl) labelEl.textContent = label;
+  else btn.textContent = label;
+  btn.disabled = !!disabled;
 }

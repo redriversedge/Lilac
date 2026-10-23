@@ -339,11 +339,12 @@ function importRecipeFromUrl(urlOverride) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: url })
   })
-  .then(function(res) { return res.json(); })
+  .then(parseImportResponse)
   .then(function(data) {
     if (data.error) {
       statusEl.className = 'import-status error';
       statusEl.textContent = 'Error: ' + data.error;
+      showPasteTextSection(true);
       return;
     }
     statusEl.className = 'import-status success';
@@ -352,11 +353,84 @@ function importRecipeFromUrl(urlOverride) {
   })
   .catch(function(err) {
     statusEl.className = 'import-status error';
-    statusEl.textContent = 'Failed to import. Try entering details manually.';
+    statusEl.textContent = 'Failed to import (' + (err && err.message ? err.message : 'network error') + '). Try "Paste recipe text" below.';
+    showPasteTextSection(true);
     console.error('Import error:', err);
   })
   .finally(function() {
     if (importBtn) importBtn.disabled = false;
+  });
+}
+
+// Netlify returns an HTML error page (not JSON) when a function times out or crashes
+function parseImportResponse(res) {
+  return res.text().then(function(text) {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      if (res.status === 502 || res.status === 504) {
+        return { error: 'The import timed out. Try "Paste recipe text" instead.' };
+      }
+      return { error: 'Import service error (HTTP ' + res.status + ').' };
+    }
+  });
+}
+
+function showPasteTextSection(show) {
+  var section = document.getElementById('paste-text-section');
+  if (section) section.classList.toggle('hidden', !show);
+}
+
+function togglePasteText() {
+  var section = document.getElementById('paste-text-section');
+  if (!section) return;
+  showPasteTextSection(section.classList.contains('hidden'));
+  if (!section.classList.contains('hidden')) {
+    var ta = document.getElementById('recipe-paste-input');
+    if (ta) ta.focus();
+  }
+}
+
+// Fallback import: AI extracts the recipe from text the user copied off the page
+function importRecipeFromText() {
+  var textEl = document.getElementById('recipe-paste-input');
+  var text = textEl ? textEl.value.trim() : '';
+  if (!text) return;
+  var urlInput = document.getElementById('recipe-url-input');
+  var url = urlInput ? urlInput.value.trim() : '';
+
+  var statusEl = document.getElementById('import-status');
+  var btn = document.getElementById('paste-import-btn');
+  statusEl.className = 'import-status loading';
+  statusEl.textContent = 'Extracting recipe from text...';
+  statusEl.classList.remove('hidden');
+  if (btn) btn.disabled = true;
+
+  fetch('/.netlify/functions/parse-recipe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: url, text: text })
+  })
+  .then(parseImportResponse)
+  .then(function(data) {
+    if (data.error) {
+      statusEl.className = 'import-status error';
+      statusEl.textContent = 'Error: ' + data.error;
+      return;
+    }
+    statusEl.className = 'import-status success';
+    statusEl.textContent = 'Recipe extracted! Review and save below.';
+    populateRecipeForm(data, url);
+    textEl.value = '';
+    showPasteTextSection(false);
+  })
+  .catch(function(err) {
+    statusEl.className = 'import-status error';
+    statusEl.textContent = 'Failed to extract recipe. Please enter details manually.';
+    console.error('Text import error:', err);
+  })
+  .finally(function() {
+    if (btn) btn.disabled = false;
   });
 }
 
@@ -603,7 +677,7 @@ function startBatchImport() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: item.url })
     })
-    .then(function(res) { return res.json(); })
+    .then(parseImportResponse)
     .then(function(data) {
       if (data.error) {
         item.el.className = 'batch-status-item error';
@@ -680,6 +754,9 @@ function resetRecipeForm() {
   }
   var status = document.getElementById('import-status');
   if (status) status.classList.add('hidden');
+  showPasteTextSection(false);
+  var pasteInput = document.getElementById('recipe-paste-input');
+  if (pasteInput) pasteInput.value = '';
   // Reset batch import
   var batchSection = document.getElementById('batch-import-section');
   if (batchSection) batchSection.classList.add('hidden');

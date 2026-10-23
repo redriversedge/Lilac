@@ -175,19 +175,25 @@ function openRecipeDetail(recipeId) {
     html += '</div>';
   }
 
-  // Actions bar
-  html += '<div class="recipe-actions">';
-  html += '<button class="btn ' + (saved ? 'btn-accent' : 'btn-outline') + '" onclick="toggleSaveRecipe(\'' + recipe.id + '\');setTimeout(function(){openRecipeDetail(\'' + recipe.id + '\')},300)">' + (saved ? '&#9829; Saved' : '&#9825; Save') + '</button>';
-  html += '<button class="btn btn-secondary" id="add-to-list-btn" onclick="this.textContent=\'Adding...\';this.disabled=true;addRecipeToGroceryList(\'' + recipe.id + '\')">&#128722; Add to List</button>';
+  // Actions bar: icon + short label so all five actions fit on a phone screen
+  var reopen = 'setTimeout(function(){openRecipeDetail(\'' + recipe.id + '\')},300)';
   var inMeals = isRecipeInWeeklyMeals(recipe.id);
-  html += '<button class="btn ' + (inMeals ? 'btn-accent' : 'btn-secondary') + '" onclick="' + (inMeals ? 'removeRecipeFromWeeklyMeals(\'' + recipe.id + '\');setTimeout(function(){openRecipeDetail(\'' + recipe.id + '\')},300)' : 'addRecipeToWeeklyMeals(\'' + recipe.id + '\');setTimeout(function(){openRecipeDetail(\'' + recipe.id + '\')},300)') + '">' + (inMeals ? '&#9989; On Menu' : '&#127869; Cook this Week') + '</button>';
   var isCooked = cookedCount > 0;
-  html += '<button class="btn ' + (isCooked ? 'btn-accent' : 'btn-secondary') + '" onclick="markRecipeCooked(\'' + recipe.id + '\');setTimeout(function(){openRecipeDetail(\'' + recipe.id + '\')},300)">' + (isCooked ? '&#9989; Cooked' : '&#127373; Cooked') + '</button>';
-  html += '<button class="btn btn-ghost" onclick="confirmDeleteRecipe(\'' + recipe.id + '\')">&#128465;</button>';
+  html += '<div class="recipe-actions">';
+  html += actionButton(saved ? 'btn-accent' : 'btn-outline', 'toggleSaveRecipe(\'' + recipe.id + '\');' + reopen, saved ? '&#9829;' : '&#9825;', saved ? 'Saved' : 'Save');
+  html += actionButton('btn-secondary', 'var l=this.querySelector(\'.action-label\');if(l)l.textContent=\'Adding...\';this.disabled=true;addRecipeToGroceryList(\'' + recipe.id + '\')', '&#128722;', 'Add to List', 'add-to-list-btn');
+  html += actionButton(inMeals ? 'btn-accent' : 'btn-secondary', (inMeals ? 'removeRecipeFromWeeklyMeals' : 'addRecipeToWeeklyMeals') + '(\'' + recipe.id + '\');' + reopen, inMeals ? '&#9989;' : '&#127869;', inMeals ? 'On Menu' : 'This Week');
+  html += actionButton(isCooked ? 'btn-accent' : 'btn-secondary', 'markRecipeCooked(\'' + recipe.id + '\');' + reopen, isCooked ? '&#9989;' : '&#127859;', 'Cooked');
+  html += actionButton('btn-ghost action-delete', 'confirmDeleteRecipe(\'' + recipe.id + '\')', '&#128465;', 'Delete');
   html += '</div>';
 
   content.innerHTML = html;
   overlay.classList.remove('hidden');
+}
+
+function actionButton(cls, onclick, icon, label, id) {
+  return '<button class="btn ' + cls + '"' + (id ? ' id="' + id + '"' : '') + ' onclick="' + onclick + '" aria-label="' + label + '">' +
+    '<span class="action-icon">' + icon + '</span><span class="action-label">' + label + '</span></button>';
 }
 
 function closeRecipeDetail() {

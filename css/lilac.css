@@ -76,6 +76,7 @@ html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
   overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
@@ -1100,7 +1101,43 @@ select {
 }
 
 .recipe-actions .btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.recipe-actions .action-delete {
+  flex: 0 0 auto;
+}
+
+/* Never let modal content widen the sheet (long ingredient strings, URLs, etc.) */
+.modal {
+  overflow-x: hidden;
+}
+
+.recipe-detail-modal {
+  overflow-wrap: anywhere;
+}
+
+/* --- PASTE RECIPE TEXT --- */
+.paste-text-section {
+  margin-top: 0.75rem;
+}
+
+.paste-text-section label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.paste-text-hint {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.paste-text-section textarea {
+  width: 100%;
 }
 
 /* Star rating */
@@ -1763,6 +1800,50 @@ select {
 @media (max-width: 639px) {
   .btn-label {
     display: none;
+  }
+
+  /* Recipe detail: full-screen sheet on phones, no gaps on any side */
+  #recipe-detail-overlay {
+    align-items: stretch;
+  }
+
+  .recipe-detail-modal {
+    max-width: none;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .recipe-detail-close {
+    top: calc(0.75rem + env(safe-area-inset-top));
+  }
+
+  /* Compact action bar: icon over a short label, five equal columns */
+  .recipe-actions {
+    gap: 0.375rem;
+    padding: 0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+  }
+
+  .recipe-actions .btn {
+    flex-direction: column;
+    gap: 0.125rem;
+    padding: 0.4375rem 0.25rem;
+    font-size: 0.6875rem;
+    line-height: 1.15;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .recipe-actions .action-delete {
+    flex: 1 1 0;
+  }
+
+  .recipe-actions .action-icon {
+    font-size: 1.125rem;
+    line-height: 1;
   }
 
   .header-center {
